@@ -1,6 +1,5 @@
 // Kurdsubtitle Scraper for Nuvio Local Scrapers
 // Compatible with React Native / Hermes and Node.js
-
 "use strict";
 
 const PROVIDER_NAME = "Kurdsubtitle";
