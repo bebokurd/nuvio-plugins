@@ -51,7 +51,6 @@ function cleanTitle(str) {
 // ─── Base64 helpers ──────────────────────────────────────────────────────────
 
 function base64ToUint8Array(b64) {
-  // React Native / Hermes has atob globally
   try {
     if (typeof Buffer !== "undefined") {
       return new Uint8Array(Buffer.from(b64, "base64"));
@@ -66,9 +65,6 @@ function base64ToUint8Array(b64) {
 }
 
 // ─── AES-GCM Decryption ──────────────────────────────────────────────────────
-// React Native 0.71+ (Hermes) exposes globalThis.crypto.subtle.
-// Node.js 15+ exposes globalThis.crypto.subtle.
-// Older RN or bare Hermes: falls back to Node's require("crypto").
 
 function getSubtle() {
   if (typeof globalThis !== "undefined" && globalThis.crypto && globalThis.crypto.subtle)
@@ -89,7 +85,6 @@ async function decryptServers(payload) {
 
   try {
     var rawBytes = base64ToUint8Array(payload);
-    // Layout: [12-byte IV][ciphertext+16-byte GCM tag]
     if (rawBytes.length < 28) {
       console.log("[Kurdsubtitle] Payload too short to be encrypted");
       return [];
@@ -98,7 +93,6 @@ async function decryptServers(payload) {
     var iv = rawBytes.slice(0, 12);
     var ciphertextWithTag = rawBytes.slice(12);
 
-    // ── Strategy 1: Web Crypto (React Native 0.71+, browsers, Node 15+) ──────
     var subtle = getSubtle();
     if (subtle) {
       try {
@@ -114,12 +108,10 @@ async function decryptServers(payload) {
       }
     }
 
-    // ── Strategy 2: Node.js crypto module (fallback) ─────────────────────────
     try {
       var nodeCrypto = require("crypto");
       if (nodeCrypto && typeof nodeCrypto.createDecipheriv === "function") {
         var key = nodeCrypto.createHash("sha256").update(ENCRYPTION_SECRET).digest();
-        // GCM tag is the last 16 bytes; ciphertext is everything before it
         var tagStart = rawBytes.length - 16;
         var tag = rawBytes.slice(tagStart);
         var cipher = rawBytes.slice(12, tagStart);
@@ -162,11 +154,8 @@ async function getTMDBDetails(tmdbId, mediaType) {
 }
 
 // ─── Search & Match ──────────────────────────────────────────────────────────
-// NOTE: Kurdsubtitle search docs do NOT expose tmdbID —
-// matching is done by title + year only.
 
 async function findOnKurdsubtitle(title, mediaType, year) {
-  // Try progressively shorter queries to maximise hits
   var queries = [title];
   if (title.includes(":")) queries.push(title.split(":")[0].trim());
   if (title.split(" ").length > 1) queries.push(title.split(" ")[0]);
@@ -183,7 +172,6 @@ async function findOnKurdsubtitle(title, mediaType, year) {
       var categories = await res.json();
       if (!Array.isArray(categories)) continue;
 
-      // Find the right category (movie vs tvshow)
       var cat = null;
       for (var ci = 0; ci < categories.length; ci++) {
         var c = categories[ci];
@@ -194,7 +182,6 @@ async function findOnKurdsubtitle(title, mediaType, year) {
       var docs = cat.data.docs;
       var normalizedTarget = cleanTitle(title);
 
-      // 1. Exact title + year match
       for (var di = 0; di < docs.length; di++) {
         var d = docs[di];
         if (cleanTitle(d.title) === normalizedTarget && (!year || !d.year || String(d.year) === String(year))) {
@@ -203,7 +190,6 @@ async function findOnKurdsubtitle(title, mediaType, year) {
         }
       }
 
-      // 2. Title contains / is contained, same year
       for (var di2 = 0; di2 < docs.length; di2++) {
         var d2 = docs[di2];
         var mt = cleanTitle(d2.title);
@@ -214,7 +200,6 @@ async function findOnKurdsubtitle(title, mediaType, year) {
         }
       }
 
-      // 3. Title-only match (ignore year)
       for (var di3 = 0; di3 < docs.length; di3++) {
         var d3 = docs[di3];
         var mt3 = cleanTitle(d3.title);
@@ -224,7 +209,6 @@ async function findOnKurdsubtitle(title, mediaType, year) {
         }
       }
 
-      // If we had good results from full-title query, take first
       if (qi === 0 && docs.length > 0) {
         console.log("[Kurdsubtitle] Fallback to first result: " + docs[0].slug);
         return docs[0];
@@ -312,7 +296,6 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
     var streams = [];
 
-    // ── Movie ─────────────────────────────────────────────────────────────────
     if (isMovie) {
       var movieUrl = API_BASE + "/movies/" + matchDoc.slug;
       console.log("[Kurdsubtitle] Fetching movie: " + movieUrl);
@@ -334,7 +317,6 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         if (st) streams.push(st);
       });
 
-    // ── TV Show ───────────────────────────────────────────────────────────────
     } else {
       var tvUrl = API_BASE + "/tvshows/" + matchDoc.slug;
       console.log("[Kurdsubtitle] Fetching tvshow: " + tvUrl);
@@ -343,11 +325,9 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       var tvData = await tvRes.json();
       var tvshow = tvData.movie || tvData;
 
-      // Verify we have the right tvshow via tmdbID on the detail page
       var detailTmdbId = String(tvshow.tmdbID || tvshow.tmdbId || "");
       if (detailTmdbId && detailTmdbId !== String(tmdbId)) {
         console.log("[Kurdsubtitle] TMDB ID mismatch (" + detailTmdbId + " vs " + tmdbId + "), trying again");
-        // Could try alternative results here, but for now log and continue
       }
 
       var tvshowId = tvshow._id || matchDoc._id || matchDoc.id;
@@ -364,7 +344,6 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         return [];
       }
 
-      // Find the right episode by number (episodes.number is a string)
       var targetEp = null;
       for (var ei = 0; ei < episodes.length; ei++) {
         if (Number(episodes[ei].number) === e) { targetEp = episodes[ei]; break; }
@@ -376,7 +355,6 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
       console.log("[Kurdsubtitle] Resolving servers for S" + s + "E" + targetEp.number);
 
-      // watchServers in episodes is ALWAYS an AES-GCM encrypted base64 string
       var watchServersRaw = await decryptServers(targetEp.watchServers);
       var dlServersRaw = await decryptServers(targetEp.downloadServers);
       var epSubs = extractSubtitles(targetEp.subtitles);
