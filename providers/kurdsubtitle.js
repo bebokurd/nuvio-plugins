@@ -9,13 +9,18 @@ const API_BASE = "https://api.kurdsubtitle.net/api/v1";
 const TMDB_API_KEY = "1c29a5198ee1854bd5eb45dbe8d17d92";
 const ENCRYPTION_SECRET = "ff7847b696daa59590236f7850e348612a48d3dcf121bf1539a101c4fb140c7e";
 const TIMEOUT_MS = 12000;
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
 
 const HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+  "User-Agent": UA,
   "Origin": BASE_URL,
-  "Referer": `${BASE_URL}/`,
+  "Referer": BASE_URL + "/",
   "Accept": "application/json, text/plain, */*"
 };
+
+const PLAYABLE_EXT = /\.(mp4|mkv|webm|avi|m3u8|mpd)(\?|$)/i;
+const EMBED_HOST = /(dhtpre\.com\/(embed|e|download)|bysejikuar\.com\/e\/|\/embed\/|player\.php)/i;
+const VSTREAMER_RE = /(?:^|\.)vstreamer\.store\/(?:stream\/)?(\d+)/i;
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -49,10 +54,60 @@ function cleanTitle(str) {
     .trim();
 }
 
+function uniqueNonEmpty(arr) {
+  var seen = {};
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var v = (arr[i] || "").trim();
+    if (!v || seen[v]) continue;
+    seen[v] = true;
+    out.push(v);
+  }
+  return out;
+}
+
+function inferQuality(str) {
+  var m = String(str || "").match(/(2160|1440|1080|720|480|360)\s*p/i);
+  return m ? m[1] + "p" : "";
+}
+
+function isDirectFile(url) {
+  return typeof url === "string" && PLAYABLE_EXT.test(url);
+}
+
+function isEmbedPage(url) {
+  return typeof url === "string" && EMBED_HOST.test(url);
+}
+
+function unescapeJsString(str) {
+  return String(str || "").replace(/\\\//g, "/");
+}
+
+function latinServerName(server, url, idx) {
+  var raw = (server && (server.name || server.label)) || "";
+  if (/vstreamer/i.test(raw) || /vstreamer/i.test(url || "")) return "Vstreamer";
+  if (/download/i.test(raw)) return "Download";
+  var latin = raw.replace(/[^\x00-\x7F]+/g, " ").replace(/\s+/g, " ").trim();
+  if (latin) return latin;
+  var hostMatch = String(url || "").match(/^https?:\/\/([^/:]+)/i);
+  if (hostMatch) return hostMatch[1].replace(/^www\./, "");
+  return "Server " + (idx + 1);
+}
+
+function buildStreamHeaders(url) {
+  var headers = { "User-Agent": UA };
+  if (/vstreamer\.store/i.test(url || "")) {
+    headers.Referer = "https://streamer.vstreamer.store/";
+    headers.Origin = "https://streamer.vstreamer.store";
+  } else {
+    headers.Referer = BASE_URL + "/";
+  }
+  return headers;
+}
+
 // ─── Base64 helpers ──────────────────────────────────────────────────────────
 
 function base64ToUint8Array(b64) {
-  // React Native / Hermes has atob globally
   try {
     if (typeof Buffer !== "undefined") {
       return new Uint8Array(Buffer.from(b64, "base64"));
@@ -67,9 +122,6 @@ function base64ToUint8Array(b64) {
 }
 
 // ─── AES-GCM Decryption ──────────────────────────────────────────────────────
-// React Native 0.71+ (Hermes) exposes globalThis.crypto.subtle.
-// Node.js 15+ exposes globalThis.crypto.subtle.
-// Older RN or bare Hermes: falls back to Node's require("crypto").
 
 function getSubtle() {
   if (typeof globalThis !== "undefined" && globalThis.crypto && globalThis.crypto.subtle)
@@ -83,14 +135,27 @@ function getSubtle() {
   return null;
 }
 
+function coerceServerList(parsed) {
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && Array.isArray(parsed.watchServers)) return parsed.watchServers;
+  if (parsed && Array.isArray(parsed.servers)) return parsed.servers;
+  return [];
+}
+
 async function decryptServers(payload) {
   if (!payload) return [];
   if (Array.isArray(payload)) return payload;
   if (typeof payload !== "string") return [];
 
+  var trimmed = payload.trim();
+  if (trimmed.charAt(0) === "[" || trimmed.charAt(0) === "{") {
+    try {
+      return coerceServerList(JSON.parse(trimmed));
+    } catch (e) {}
+  }
+
   try {
     var rawBytes = base64ToUint8Array(payload);
-    // Layout: [12-byte IV][ciphertext+16-byte GCM tag]
     if (rawBytes.length < 28) {
       console.log("[Kurdsubtitle] Payload too short to be encrypted");
       return [];
@@ -99,7 +164,6 @@ async function decryptServers(payload) {
     var iv = rawBytes.slice(0, 12);
     var ciphertextWithTag = rawBytes.slice(12);
 
-    // ── Strategy 1: Web Crypto (React Native 0.71+, browsers, Node 15+) ──────
     var subtle = getSubtle();
     if (subtle) {
       try {
@@ -108,31 +172,25 @@ async function decryptServers(payload) {
         var cryptoKey = await subtle.importKey("raw", keyHash, { name: "AES-GCM" }, false, ["decrypt"]);
         var decrypted = await subtle.decrypt({ name: "AES-GCM", iv: iv, tagLength: 128 }, cryptoKey, ciphertextWithTag);
         var text = new TextDecoder().decode(decrypted);
-        var parsed = JSON.parse(text);
-        return Array.isArray(parsed) ? parsed : [];
+        return coerceServerList(JSON.parse(text));
       } catch (e) {
         console.log("[Kurdsubtitle] WebCrypto decrypt failed: " + e.message);
       }
     }
 
-    // ── Strategy 2: Node.js crypto module (fallback) ─────────────────────────
     try {
       var nodeCrypto = require("crypto");
       if (nodeCrypto && typeof nodeCrypto.createDecipheriv === "function") {
         var key = nodeCrypto.createHash("sha256").update(ENCRYPTION_SECRET).digest();
-        // GCM tag is the last 16 bytes; ciphertext is everything before it
         var tagStart = rawBytes.length - 16;
         var tag = rawBytes.slice(tagStart);
         var cipher = rawBytes.slice(12, tagStart);
         var decipher = nodeCrypto.createDecipheriv("aes-256-gcm", key, iv);
         decipher.setAuthTag(tag);
         var dec = Buffer.concat([decipher.update(Buffer.from(cipher)), decipher.final()]);
-        var parsedNode = JSON.parse(dec.toString("utf8"));
-        return Array.isArray(parsedNode) ? parsedNode : [];
+        return coerceServerList(JSON.parse(dec.toString("utf8")));
       }
-    } catch (nodeErr) {
-      // Node crypto not available or failed
-    }
+    } catch (nodeErr) {}
 
     console.log("[Kurdsubtitle] No crypto API available for decryption");
     return [];
@@ -152,158 +210,203 @@ async function getTMDBDetails(tmdbId, mediaType) {
     );
     if (!res.ok) throw new Error("TMDB HTTP " + res.status);
     var data = await res.json();
+    var titles = uniqueNonEmpty([
+      data.title,
+      data.name,
+      data.original_title,
+      data.original_name
+    ]);
     return {
-      title: data.name || data.title || "",
+      title: titles[0] || "",
+      titles: titles,
       year: (data.first_air_date || data.release_date || "").split("-")[0]
     };
   } catch (err) {
     console.log("[Kurdsubtitle] TMDB error: " + err.message);
-    return { title: "", year: "" };
+    return { title: "", titles: [], year: "" };
   }
 }
 
-// ─── Search & Match ──────────────────────────────────────────────────────────
-// NOTE: Kurdsubtitle search docs do NOT expose tmdbID —
-// matching is done by title + year only.
+function scoreDoc(doc, titles, year) {
+  var dt = cleanTitle(doc.title);
+  if (!dt) return 0;
+  var yearOk = !year || !doc.year || String(doc.year) === String(year);
+  var best = 0;
+  for (var i = 0; i < titles.length; i++) {
+    var nt = cleanTitle(titles[i]);
+    if (!nt) continue;
+    if (dt === nt && yearOk) return 100;
+    if (dt === nt) best = Math.max(best, 70);
+    else if (yearOk && (dt.indexOf(nt) !== -1 || nt.indexOf(dt) !== -1)) best = Math.max(best, 55);
+  }
+  return best;
+}
 
-async function findOnKurdsubtitle(title, mediaType, year) {
-  // Try progressively shorter queries to maximise hits
-  var queries = [title];
-  if (title.includes(":")) queries.push(title.split(":")[0].trim());
-  if (title.split(" ").length > 1) queries.push(title.split(" ")[0]);
+// ─── Search & Match ──────────────────────────────────────────────────────────
+
+async function searchDocs(query, targetType) {
+  var url = API_BASE + "/search?query=" + encodeURIComponent(query);
+  console.log("[Kurdsubtitle] Searching: " + url);
+  var res = await fetchWithTimeout(url);
+  if (!res.ok) return [];
+  var categories = await res.json();
+  if (!Array.isArray(categories)) return [];
+  for (var ci = 0; ci < categories.length; ci++) {
+    var c = categories[ci];
+    if (c.type === targetType && c.data && Array.isArray(c.data.docs)) return c.data.docs;
+  }
+  return [];
+}
+
+async function findOnKurdsubtitle(titles, mediaType, year) {
+  var titleList = uniqueNonEmpty(titles);
+  var queries = [];
+  for (var ti = 0; ti < titleList.length; ti++) {
+    var title = titleList[ti];
+    queries.push(title);
+    if (title.indexOf(":") !== -1) queries.push(title.split(":")[0].trim());
+  }
+  queries = uniqueNonEmpty(queries);
 
   var targetType = mediaType === "movie" ? "movie" : "tvshow";
+  var best = null;
+  var bestScore = 0;
 
   for (var qi = 0; qi < queries.length; qi++) {
-    var q = queries[qi];
     try {
-      var url = API_BASE + "/search?query=" + encodeURIComponent(q);
-      console.log("[Kurdsubtitle] Searching: " + url);
-      var res = await fetchWithTimeout(url);
-      if (!res.ok) continue;
-      var categories = await res.json();
-      if (!Array.isArray(categories)) continue;
-
-      // Find the right category (movie vs tvshow)
-      var cat = null;
-      for (var ci = 0; ci < categories.length; ci++) {
-        var c = categories[ci];
-        if (c.type === targetType) { cat = c; break; }
-      }
-      if (!cat || !cat.data || !Array.isArray(cat.data.docs) || !cat.data.docs.length) continue;
-
-      var docs = cat.data.docs;
-      var normalizedTarget = cleanTitle(title);
-
-      // 1. Exact title + year match
+      var docs = await searchDocs(queries[qi], targetType);
       for (var di = 0; di < docs.length; di++) {
-        var d = docs[di];
-        if (cleanTitle(d.title) === normalizedTarget && (!year || !d.year || String(d.year) === String(year))) {
-          console.log("[Kurdsubtitle] Exact match: " + d.slug);
-          return d;
+        var sc = scoreDoc(docs[di], titleList, year);
+        if (sc > bestScore) {
+          bestScore = sc;
+          best = docs[di];
         }
       }
-
-      // 2. Title contains / is contained, same year
-      for (var di2 = 0; di2 < docs.length; di2++) {
-        var d2 = docs[di2];
-        var mt = cleanTitle(d2.title);
-        var sameYear = !year || !d2.year || String(d2.year) === String(year);
-        if (sameYear && (mt.includes(normalizedTarget) || normalizedTarget.includes(mt))) {
-          console.log("[Kurdsubtitle] Partial match: " + d2.slug);
-          return d2;
-        }
-      }
-
-      // 3. Title-only match (ignore year)
-      for (var di3 = 0; di3 < docs.length; di3++) {
-        var d3 = docs[di3];
-        var mt3 = cleanTitle(d3.title);
-        if (mt3 === normalizedTarget || mt3.includes(normalizedTarget) || normalizedTarget.includes(mt3)) {
-          console.log("[Kurdsubtitle] Title-only match: " + d3.slug);
-          return d3;
-        }
-      }
-
-      // If we had good results from full-title query, take first
-      if (qi === 0 && docs.length > 0) {
-        console.log("[Kurdsubtitle] Fallback to first result: " + docs[0].slug);
-        return docs[0];
-      }
+      if (bestScore >= 100) break;
     } catch (e) {
       console.log("[Kurdsubtitle] Search attempt failed: " + e.message);
     }
   }
 
-  console.log("[Kurdsubtitle] Content not found on Kurdsubtitle");
-  return null;
+  if (!best || bestScore < 55) {
+    console.log("[Kurdsubtitle] Content not found on Kurdsubtitle");
+    return null;
+  }
+
+  console.log("[Kurdsubtitle] Match: " + best.slug + " (score " + bestScore + ")");
+  return best;
 }
 
-// ─── Stream builders ─────────────────────────────────────────────────────────
-
-function buildStreamHeaders() {
-  return {
-    "User-Agent": HEADERS["User-Agent"],
-    "Referer": BASE_URL + "/"
-  };
+function tmdbMatches(item, tmdbId) {
+  var id = String(item.tmdbID || item.tmdbId || "");
+  return !id || id === String(tmdbId);
 }
 
-function unescapeJsString(str) {
-  return String(str || "").replace(/\\\//g, "/");
+// ─── Stream resolve ──────────────────────────────────────────────────────────
+
+async function resolveVstreamer(videoId) {
+  var fallback = "https://main.vstreamer.store/" + videoId + ".mp4";
+  try {
+    var res = await fetchWithTimeout("https://server.vstreamer.store/api/videos/" + videoId, {
+      headers: {
+        Origin: "https://streamer.vstreamer.store",
+        Referer: "https://streamer.vstreamer.store/stream/" + videoId,
+        Accept: "application/json"
+      }
+    });
+    if (res.ok) {
+      var body = await res.json();
+      var data = body && body.data ? body.data : body;
+      var link = data && (data.link || data.secondaryLink || data.url);
+      if (typeof link === "string" && link.indexOf("http") === 0) {
+        return {
+          url: link,
+          quality: inferQuality(data.name) || "1080p",
+          sourceName: "Vstreamer"
+        };
+      }
+    }
+  } catch (e) {
+    console.log("[Kurdsubtitle] Vstreamer API failed: " + e.message);
+  }
+
+  try {
+    var page = await fetchWithTimeout("https://streamer.vstreamer.store/stream/" + videoId);
+    if (page.ok) {
+      var html = await page.text();
+      var fileMatch = html.match(/file:\s*"([^"]+)"/);
+      if (fileMatch && fileMatch[1]) {
+        var fileUrl = unescapeJsString(fileMatch[1]);
+        if (fileUrl.indexOf("http") === 0) {
+          return { url: fileUrl, quality: "1080p", sourceName: "Vstreamer" };
+        }
+      }
+    }
+  } catch (e) {
+    console.log("[Kurdsubtitle] Vstreamer page failed: " + e.message);
+  }
+
+  return { url: fallback, quality: "1080p", sourceName: "Vstreamer" };
 }
 
 async function resolveServerUrl(url) {
-  if (!url || typeof url !== "string" || !url.startsWith("http")) return null;
+  if (!url || typeof url !== "string") return null;
+  url = url.trim();
+  if (url.indexOf("http") !== 0) return null;
+  if (isEmbedPage(url)) return null;
 
-  var vstreamMatch = url.match(/streamer\.vstreamer\.store\/stream\/(\d+)/i);
-  if (!vstreamMatch) return url;
+  var vs = url.match(VSTREAMER_RE);
+  if (vs) return resolveVstreamer(vs[1]);
 
-  var videoId = vstreamMatch[1];
-  var fallbackMp4 = "https://main.vstreamer.store/" + videoId + ".mp4";
-
-  try {
-    var res = await fetchWithTimeout(url);
-    if (!res.ok) return fallbackMp4;
-    var html = await res.text();
-    var fileMatch = html.match(/file:\s*"([^"]+)"/);
-    if (fileMatch && fileMatch[1]) {
-      var fileUrl = unescapeJsString(fileMatch[1]);
-      if (fileUrl.startsWith("http")) return fileUrl;
-    }
-  } catch (e) {
-    console.log("[Kurdsubtitle] Vstreamer resolve failed: " + e.message);
-  }
-
-  return fallbackMp4;
+  if (isDirectFile(url)) return { url: url, quality: inferQuality(url) || "Auto", sourceName: "" };
+  return null;
 }
 
-async function serverToStream(server, idx, streamTitle, subtitles) {
-  var url = await resolveServerUrl(server.url || server.value || null);
-  if (!url) return null;
-  var name = server.name || ("Server " + (idx + 1));
-  var quality = server.quality || "Auto";
+function makeStream(url, name, quality, streamTitle, subtitles, language) {
+  var lang = language ? " · " + language : "";
   return {
-    name: PROVIDER_NAME + " [" + name + "]",
+    name: PROVIDER_NAME + " [" + name + lang + "]",
     title: streamTitle + " · " + quality,
     url: url,
     quality: quality,
-    headers: buildStreamHeaders(),
+    headers: buildStreamHeaders(url),
     subtitles: subtitles || []
   };
 }
 
-function downloadToStream(dl, streamTitle) {
-  var url = dl.url || dl.value || null;
-  if (!url || typeof url !== "string" || !url.startsWith("http")) return null;
-  var quality = dl.quality || "1080p";
-  return {
-    name: PROVIDER_NAME + " [Download · " + quality + "]",
-    title: streamTitle + " · " + quality,
-    url: url,
-    quality: quality,
-    headers: buildStreamHeaders(),
-    subtitles: []
-  };
+async function serversToStreams(servers, streamTitle, subtitles, language) {
+  var list = Array.isArray(servers) ? servers : [];
+  var resolved = await Promise.all(list.map(function (srv) {
+    return resolveServerUrl(srv && (srv.url || srv.value || srv.link));
+  }));
+
+  var streams = [];
+  var seen = {};
+  for (var i = 0; i < resolved.length; i++) {
+    var r = resolved[i];
+    if (!r || !r.url || seen[r.url]) continue;
+    seen[r.url] = true;
+    var name = r.sourceName || latinServerName(list[i], r.url, i);
+    var quality = inferQuality(list[i] && list[i].quality) || r.quality || "Auto";
+    streams.push(makeStream(r.url, name, quality, streamTitle, subtitles, language));
+  }
+  return streams;
+}
+
+function downloadsToStreams(downloads, streamTitle, language) {
+  var list = Array.isArray(downloads) ? downloads : [];
+  var streams = [];
+  var seen = {};
+  for (var i = 0; i < list.length; i++) {
+    var url = list[i] && (list[i].url || list[i].value || list[i].link);
+    if (!url || typeof url !== "string" || url.indexOf("http") !== 0) continue;
+    if (isEmbedPage(url) || !isDirectFile(url)) continue;
+    if (seen[url]) continue;
+    seen[url] = true;
+    var quality = list[i].quality || inferQuality(url) || "1080p";
+    streams.push(makeStream(url, "Download", quality, streamTitle, [], language));
+  }
+  return streams;
 }
 
 function extractSubtitles(arr) {
@@ -313,6 +416,22 @@ function extractSubtitles(arr) {
     if (url) acc.push({ url: url, lang: sub.lang || sub.language || "Kurdish" });
     return acc;
   }, []);
+}
+
+function itemLanguage(item) {
+  if (!item) return "";
+  if (Array.isArray(item.language) && item.language.length) return item.language[0];
+  if (typeof item.language === "string") return item.language;
+  return "";
+}
+
+async function collectFromItem(item, streamTitle) {
+  var subs = extractSubtitles(item.subtitles);
+  var language = itemLanguage(item);
+  var watchServers = await decryptServers(item.watchServers);
+  var dlServers = await decryptServers(item.downloadServers);
+  var streams = await serversToStreams(watchServers, streamTitle, subs, language);
+  return streams.concat(downloadsToStreams(dlServers, streamTitle, language));
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
@@ -327,10 +446,10 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
   try {
     var tmdbInfo = await getTMDBDetails(tmdbId, mediaType);
-    var searchTitle = tmdbInfo.title || String(tmdbId);
+    var searchTitles = tmdbInfo.titles && tmdbInfo.titles.length ? tmdbInfo.titles : [String(tmdbId)];
     var searchYear = tmdbInfo.year || "";
 
-    var matchDoc = await findOnKurdsubtitle(searchTitle, mediaType, searchYear);
+    var matchDoc = await findOnKurdsubtitle(searchTitles, mediaType, searchYear);
     if (!matchDoc || !matchDoc.slug) {
       console.log("[Kurdsubtitle] Not found, returning []");
       return [];
@@ -340,89 +459,58 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       (isMovie ? "" : (" S" + String(s).padStart(2, "0") + "E" + String(e).padStart(2, "0"))) +
       (tmdbInfo.year || matchDoc.year ? " (" + (tmdbInfo.year || matchDoc.year) + ")" : "");
 
-    var streams = [];
-
-    // ── Movie ─────────────────────────────────────────────────────────────────
     if (isMovie) {
       var movieUrl = API_BASE + "/movies/" + matchDoc.slug;
       console.log("[Kurdsubtitle] Fetching movie: " + movieUrl);
       var mRes = await fetchWithTimeout(movieUrl);
       if (!mRes.ok) throw new Error("Movie HTTP " + mRes.status);
-      var mData = await mRes.json();
-      var movie = mData.movie || mData;
-
-      var subs = extractSubtitles(movie.subtitles);
-      var watchServers = await decryptServers(movie.watchServers);
-      var dlServers = await decryptServers(movie.downloadServers);
-
-      for (var mi = 0; mi < watchServers.length; mi++) {
-        var st = await serverToStream(watchServers[mi], mi, streamTitle, subs);
-        if (st) streams.push(st);
-      }
-      dlServers.forEach(function (dl) {
-        var st = downloadToStream(dl, streamTitle);
-        if (st) streams.push(st);
-      });
-
-    // ── TV Show ───────────────────────────────────────────────────────────────
-    } else {
-      var tvUrl = API_BASE + "/tvshows/" + matchDoc.slug;
-      console.log("[Kurdsubtitle] Fetching tvshow: " + tvUrl);
-      var tvRes = await fetchWithTimeout(tvUrl);
-      if (!tvRes.ok) throw new Error("TVShow HTTP " + tvRes.status);
-      var tvData = await tvRes.json();
-      var tvshow = tvData.movie || tvData;
-
-      // Verify we have the right tvshow via tmdbID on the detail page
-      var detailTmdbId = String(tvshow.tmdbID || tvshow.tmdbId || "");
-      if (detailTmdbId && detailTmdbId !== String(tmdbId)) {
-        console.log("[Kurdsubtitle] TMDB ID mismatch (" + detailTmdbId + " vs " + tmdbId + "), trying again");
-        // Could try alternative results here, but for now log and continue
-      }
-
-      var tvshowId = tvshow._id || matchDoc._id || matchDoc.id;
-      if (!tvshowId) throw new Error("No tvshow _id found");
-
-      var epUrl = API_BASE + "/tvshows/" + tvshowId + "/seasons/" + s + "/episodes";
-      console.log("[Kurdsubtitle] Fetching episodes: " + epUrl);
-      var epRes = await fetchWithTimeout(epUrl);
-      if (!epRes.ok) throw new Error("Episodes HTTP " + epRes.status);
-      var episodes = await epRes.json();
-
-      if (!Array.isArray(episodes) || !episodes.length) {
-        console.log("[Kurdsubtitle] No episodes for season " + s);
+      var movie = (await mRes.json()).movie || {};
+      if (!tmdbMatches(movie, tmdbId)) {
+        console.log("[Kurdsubtitle] TMDB mismatch on movie detail, skipping");
         return [];
       }
-
-      // Find the right episode by number (episodes.number is a string)
-      var targetEp = null;
-      for (var ei = 0; ei < episodes.length; ei++) {
-        if (Number(episodes[ei].number) === e) { targetEp = episodes[ei]; break; }
-      }
-      if (!targetEp) {
-        targetEp = episodes[e - 1] || episodes[0];
-        console.log("[Kurdsubtitle] Ep " + e + " not found by number, using index fallback");
-      }
-
-      console.log("[Kurdsubtitle] Resolving servers for S" + s + "E" + targetEp.number);
-
-      // watchServers may be a plaintext array (movies) or AES-GCM base64 (some TV episodes)
-      var watchServersRaw = await decryptServers(targetEp.watchServers);
-      var dlServersRaw = await decryptServers(targetEp.downloadServers);
-      var epSubs = extractSubtitles(targetEp.subtitles);
-
-      for (var wi = 0; wi < watchServersRaw.length; wi++) {
-        var st = await serverToStream(watchServersRaw[wi], wi, streamTitle, epSubs);
-        if (st) streams.push(st);
-      }
-      dlServersRaw.forEach(function (dl) {
-        var st = downloadToStream(dl, streamTitle);
-        if (st) streams.push(st);
-      });
+      var movieStreams = await collectFromItem(movie, streamTitle);
+      console.log("[Kurdsubtitle] Done: " + movieStreams.length + " stream(s)");
+      return movieStreams;
     }
 
-    console.log("[Kurdsubtitle] Done: " + streams.length + " stream(s)");
-    return streams;
+    var tvUrl = API_BASE + "/tvshows/" + matchDoc.slug;
+    console.log("[Kurdsubtitle] Fetching tvshow: " + tvUrl);
+    var tvRes = await fetchWithTimeout(tvUrl);
+    if (!tvRes.ok) throw new Error("TVShow HTTP " + tvRes.status);
+    var tvshow = (await tvRes.json()).movie || {};
+    if (!tmdbMatches(tvshow, tmdbId)) {
+      console.log("[Kurdsubtitle] TMDB mismatch on tv detail, skipping");
+      return [];
+    }
+
+    var tvshowId = tvshow._id || matchDoc._id || matchDoc.id;
+    if (!tvshowId) throw new Error("No tvshow _id found");
+
+    var epUrl = API_BASE + "/tvshows/" + tvshowId + "/seasons/" + s + "/episodes";
+    console.log("[Kurdsubtitle] Fetching episodes: " + epUrl);
+    var epRes = await fetchWithTimeout(epUrl);
+    if (!epRes.ok) throw new Error("Episodes HTTP " + epRes.status);
+    var episodes = await epRes.json();
+
+    if (!Array.isArray(episodes) || !episodes.length) {
+      console.log("[Kurdsubtitle] No episodes for season " + s);
+      return [];
+    }
+
+    var targetEp = null;
+    for (var ei = 0; ei < episodes.length; ei++) {
+      if (Number(episodes[ei].number) === e) { targetEp = episodes[ei]; break; }
+    }
+    if (!targetEp) {
+      console.log("[Kurdsubtitle] Episode " + e + " not found");
+      return [];
+    }
+
+    console.log("[Kurdsubtitle] Resolving servers for S" + s + "E" + targetEp.number);
+    var tvStreams = await collectFromItem(targetEp, streamTitle);
+    console.log("[Kurdsubtitle] Done: " + tvStreams.length + " stream(s)");
+    return tvStreams;
 
   } catch (err) {
     console.error("[Kurdsubtitle] Fatal: " + err.message);
