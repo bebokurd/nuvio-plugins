@@ -1,5 +1,5 @@
 {
-  "name": "CHYA plugins",
+  "name": "Ray's Plugins",
   "version": "1.0",
   "scrapers": [
     {
@@ -195,6 +195,19 @@
       "formats": ["mp4", "mkv"],
       "logo": "https://files.catbox.moe/4mdxz9.jpeg",
       "contentLanguage": ["en"]
+    },
+    {
+      "id": "nuvio-shafilm",
+      "name": "ShaFilm",
+      "description": "Kurdish (Sorani) subtitled movies and TV shows with direct HLS links (~5s)",
+      "version": "1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "providers/shafilm.js",
+      "enabled": true,
+      "formats": ["m3u8", "mp4"],
+      "logo": "https://shafilm.vip/public/static/logo_1.png",
+      "contentLanguage": ["ku", "en"]
     },
     {
       "id": "nuvio-tokyoinsider",
