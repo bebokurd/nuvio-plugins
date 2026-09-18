@@ -234,6 +234,21 @@ function getSeasonCounts(tmdbId, upTo) {
 
 var SITE_STRIP = ["فيلم", "كرتون", "مدبلج", "مدبلجة", "مترجم", "مسلسل", "الرسوم", "انمي", "أنمي"];
 
+// Arabic ↔ English aliases for well-known titles. Guarantees a match even when
+// TMDB has no (or a different) Arabic translation, e.g. the site names an entry
+// "داني الشبح" while TMDB only returns "Danny Phantom".
+// Format: [Arabic, English] — normalized at match time.
+var TITLE_ALIASES = [
+  ["داني الشبح", "danny phantom"],
+  ["سبونج بوب سكوير بانتس", "spongebob squarepants"],
+  ["المحقق كونان", "detective conan"],
+  ["توم وجيري", "tom and jerry"],
+  ["سكوبي دو", "scooby doo"],
+  ["ون بيس", "one piece"],
+  ["بوكيمون", "pokemon"],
+  ["بن 10", "ben 10"]
+];
+
 function cleanSiteTitle(str) {
   var t = normalizeAr(str);
   for (var i = 0; i < SITE_STRIP.length; i++) {
@@ -253,6 +268,17 @@ function nameScore(entry, tmdbTitles) {
   if (!n) return 0;
   var best = 0;
   var tn, te, w, shared, all, i, a;
+
+  // Arabic↔English alias guarantee (works without TMDB Arabic translations).
+  for (var q = 0; q < TITLE_ALIASES.length; q++) {
+    var al = normalizeAr(TITLE_ALIASES[q][0]);
+    if (!al || (n !== al && n.indexOf(al) === -1)) continue;
+    var enAlias = normalizeEn(TITLE_ALIASES[q][1]);
+    for (i = 0; i < tmdbTitles.length; i++) {
+      if (enAlias && normalizeEn(tmdbTitles[i]).indexOf(enAlias) !== -1) return 95;
+    }
+  }
+
   for (i = 0; i < tmdbTitles.length; i++) {
     tn = normalizeAr(tmdbTitles[i]);
     te = normalizeEn(tmdbTitles[i]);
