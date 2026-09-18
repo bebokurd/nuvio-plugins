@@ -57,6 +57,25 @@ function uniqueNonEmpty(arr) {
   return out;
 }
 
+// ─── Short-lived caches ───────────────────────────────────────────────────────
+// Nuvio often calls getStreams several times for the same title (per season /
+// episode / retry). The site catalog is large and AES-encrypted, so re-fetching
+// it on every call is slow. Cache catalog, TMDB metadata and season counts.
+
+var CACHE_TTL_MS = 15 * 60 * 1000;
+var _cache = {};
+
+function cacheGet(key) {
+  var e = _cache[key];
+  if (e && (Date.now() - e.ts) < CACHE_TTL_MS) return e.val;
+  return null;
+}
+
+function cacheSet(key, val) {
+  _cache[key] = { ts: Date.now(), val: val };
+  return val;
+}
+
 // Normalize Arabic: strip diacritics, unify alef/hamza/ya/ta-marbuta.
 function normalizeAr(str) {
   return String(str || "")
@@ -157,6 +176,9 @@ function apiJson(path, options) {
 
 async function getTMDBInfo(tmdbId, mediaType) {
   var type = mediaType === "movie" ? "movie" : "tv";
+  var ck = "tmdb:" + type + ":" + tmdbId;
+  var hit = cacheGet(ck);
+  if (hit) return hit;
   var titles = [];
   var primary = "";
   var year = "";
@@ -195,17 +217,20 @@ async function getTMDBInfo(tmdbId, mediaType) {
     console.log("[Cartoony] TMDB translations error: " + e.message);
   }
 
-  return {
+  return cacheSet(ck, {
     primaryTitle: primary,
     year: year,
     numSeasons: numSeasons,
     titles: uniqueNonEmpty(titles)
-  };
+  });
 }
 
 // TMDB per-season episode counts (used to map a requested S/E onto the site's
 // flat, single-entry episode list for shows like Danny Phantom / SpongeBob).
 function getSeasonCounts(tmdbId, upTo) {
+  var ck = "seasons:" + tmdbId + ":" + upTo;
+  var hit = cacheGet(ck);
+  if (hit) return Promise.resolve(hit);
   var counts = [];
   var maxFetch = Math.min(upTo, 6);
   var s = 1;
@@ -227,7 +252,7 @@ function getSeasonCounts(tmdbId, upTo) {
       return next();
     });
   }
-  return next();
+  return next().then(function (c) { return cacheSet(ck, c); });
 }
 
 // ─── Local library search ────────────────────────────────────────────────────
@@ -279,6 +304,24 @@ function nameScore(entry, tmdbTitles) {
     }
   }
 
+  // SP catalog exposes a raw `tags` field (Arabic + English aliases) — the same
+  // field the site's own client-side search scores against. Match those aliases
+  // to TMDB titles to catch cross-language matches (e.g. "سونيك بووم" ↔ "Sonic Boom").
+  if (entry.tags) {
+    var tagList = String(entry.tags).split(/[\t,;|\n]+/);
+    for (var g = 0; g < tagList.length; g++) {
+      var tg = normalizeEn(tagList[g]);
+      if (!tg || tg.length < 3) continue;
+      var tgWords = tg.split(" ").length;
+      for (i = 0; i < tmdbTitles.length; i++) {
+        var tt = normalizeEn(tmdbTitles[i]);
+        if (!tt) continue;
+        if (tt === tg) return 93;
+        if (tgWords >= 2 && tg.length >= 6 && tt.indexOf(tg) !== -1) return 93;
+      }
+    }
+  }
+
   for (i = 0; i < tmdbTitles.length; i++) {
     tn = normalizeAr(tmdbTitles[i]);
     te = normalizeEn(tmdbTitles[i]);
@@ -326,10 +369,17 @@ function scoreEntry(entry, info, reqSeason) {
     }
   }
   if (info.year && String(entry.title).indexOf(info.year) !== -1) sc += 5;
+  if (info.year && entry.year && String(entry.year) === String(info.year)) sc += 5;
   return sc;
 }
 
 async function loadCatalog(isMovie) {
+  var ck = "catalog:" + (isMovie ? "movie" : "tv");
+  var hit = cacheGet(ck);
+  if (hit) {
+    console.log("[Cartoony] Catalog cache hit (" + ck + ", " + hit.length + " entries)");
+    return hit;
+  }
   var out = [];
   try {
     var regs = await apiJson("/api/tvshows");
@@ -343,7 +393,9 @@ async function loadCatalog(isMovie) {
           site: "tg",
           id: r.id,
           title: r.title || r.name || "",
-          quality: r.quality || ""
+          quality: r.quality || "",
+          year: String(r.release_year || "").slice(0, 4),
+          tags: ""
         });
       }
     }
@@ -362,13 +414,16 @@ async function loadCatalog(isMovie) {
           site: "sp",
           id: s.id,
           title: s.name || "",
-          quality: s.ep_duration ? "" : ""
+          quality: "",
+          year: "",
+          tags: s.tags || ""
         });
       }
     }
   } catch (e) {
     console.log("[Cartoony] SP catalog failed: " + e.message);
   }
+  if (out.length) cacheSet(ck, out);
   return out;
 }
 
