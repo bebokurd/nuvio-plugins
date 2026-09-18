@@ -6,7 +6,7 @@
 
 Fetch premium streams from a wide variety of providers — movies, series, anime & more — directly inside the app.
 
-[![Plugins](https://img.shields.io/badge/plugins-24-2496ED?style=for-the-badge&logo=appveyor&logoColor=white)](https://github.com/hihihihihiiray/nuvio-plugins)
+[![Plugins](https://img.shields.io/badge/plugins-26-2496ED?style=for-the-badge&logo=appveyor&logoColor=white)](https://github.com/hihihihihiiray/nuvio-plugins)
 [![Nuvio Ready](https://img.shields.io/badge/nuvio%20ready-%E2%9C%93-brightgreen?style=for-the-badge)](https://raw.githubusercontent.com/hihihihihiiray/nuvio-plugins/refs/heads/main/manifest.json)
 [![Content](https://img.shields.io/badge/movies%20%26%20tv%20%26%20anime-4K%2F1080p-FF7F50?style=for-the-badge)](https://github.com/hihihihihiiray/nuvio-plugins)
 [![License](https://img.shields.io/badge/license-Educational%20Only-orange?style=for-the-badge)](LICENSE)
@@ -70,6 +70,7 @@ https://raw.githubusercontent.com/hihihihihiiray/nuvio-plugins/refs/heads/main/m
 | [<img src="https://ruayamo.s-ul.eu/QamCog9I" width="24" />](https://postimg.cc/5QS8YH3N) FilmModu | 🏴󠁧󠁢󠁥󠁮󠁧󠁿 🇹🇷 | Shows & Movies | 1080p / 720p |
 | [<img src="https://i.postimg.cc/cJ6s6jq8/download-(2).png" width="24" />](https://postimg.cc/CZTyQcxF) HDHub4u | 🏴󠁧󠁢󠁥󠁮󠁧󠁿 🇮🇳 | Shows & Movies | **4K / 1080p / 720p** |
 | 🎬 Kurdsubtitle | 🏴󠁧󠁢󠁥󠁮󠁧󠁿 🇮🇶 | Shows & Movies | 1080p / 720p |
+| [<img src="https://www.google.com/s2/favicons?domain=kurdcinama.com&sz=64" width="24" />](https://kurdcinama.com) KurdCinema | 🏴󠁧󠁢󠁥󠁮󠁿 🇮🇶 | Shows & Movies | 1080p / 720p |
 | 🎬 Mapple | 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Shows & Movies | 1080p / 720p |
 | [<img src="https://ruayamo.s-ul.eu/yCuUJlvP" width="24" />](https://postimg.cc/ykh7tp9T) MovieBlast | 🏴󠁧󠁢󠁥󠁮󠁧󠁿 🇮🇳 | Shows & Movies | 1080p / 720p |
 | [<img src="https://ruayamo.s-ul.eu/0lxldV5e" width="24" />](https://postimg.cc/p5JKh9ZV) Movix | 🏴󠁧󠁢󠁥󠁮󠁧󠁿 🇫🇷 | Shows & Movies | 1080p / 720p |
@@ -91,8 +92,9 @@ https://raw.githubusercontent.com/hihihihihiiray/nuvio-plugins/refs/heads/main/m
 | [<img src="https://ruayamo.s-ul.eu/8v3IFJsp" width="24" />](https://postimg.cc/DJYGs7yY) TokyoInsider | 🏴󠁧󠁢󠁥󠁮󠁧󠁿 🇯🇵 | Anime (Shows & Movies) | 1080p / 720p |
 | [<img src="https://www.google.com/s2/favicons?domain=arabic-toons.com&sz=64" width="24" />](https://www.arabic-toons.com) ArabicToons | 🇪🇬 | Anime (Shows & Movies) | 1080p / 720p |
 | [<img src="https://www.google.com/s2/favicons?domain=cartoony.net&sz=64" width="24" />](https://cartoony.net) Cartoony | 🇸🇦 | Spacetoon-era Anime (Shows & Movies) | 1080p / 720p |
+| [<img src="https://www.google.com/s2/favicons?domain=carateen.tv&sz=64" width="24" />](https://carateen.tv) Carateen | 🇸🇦 | Spacetoon Go Anime (Shows & Movies) | 1080p / 720p |
 
-> **Total plugins: 24** · Highest supported quality is shown in **bold**.
+> **Total plugins: 26** · Highest supported quality is shown in **bold**.
 
 ---
 
