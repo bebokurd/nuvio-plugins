@@ -1,5 +1,7 @@
 // KurdCinema Scraper for Nuvio Local Scrapers
 // Kurdish-subtitled movies & TV shows (Sorani) via kurdcinama.com
+// Collects every server from the page dropdown and returns each resolvable
+// direct link (Stream wish family, VidHide/File lions, Sendvid, YourUpload).
 // Compatible with React Native / Hermes and Node.js
 
 "use strict";
@@ -11,16 +13,13 @@ var TIMEOUT_MS = 15000;
 var UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
 var CACHE_TTL_MS = 15 * 60 * 1000;
 
-// Player front-ends that share the same packed config (`links = { hls4, hls2, hls3 }`).
-// hgcloud.to and friends just redirect to one of these.
-var PLAYER_HOSTS = [
-  "hanerix.com",
-  "playerwish.com",
-  "obeywish.com",
-  "audinifer.com",
-  "swdyu.com",
-  "swishsrv.com"
-];
+// Player iframes are hosted on rotating front-ends. All of the "stream wish"
+// family (swdyu/playerwish/obeywish/hanerix/swishsrv/audinifer) and the
+// VidHide family (vidhide*/callistanise/dintezuvio/minochinos) share a packed
+// `hls4/hls2/hls3` config; youupload/sendvid expose a direct MP4.
+
+// Domains that only ever appear as decoys / test media, never a real stream.
+var DECOY_RE = /test-videos\.co\.uk|bigbuckbunny|sample-videos\.com|w3\.org|schema\.org/i;
 
 // ─── Cache ───────────────────────────────────────────────────────────────────
 
@@ -71,25 +70,54 @@ function fetchText(url, headers) {
   });
 }
 
-function pad2(n) {
-  return n < 10 ? "0" + n : "" + n;
+function fetchTextPost(url, body, headers, timeoutMs) {
+  return fetchWithTimeout(url, { method: "POST", headers: headers || {}, body: body }, timeoutMs).then(function (res) {
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.text();
+  });
 }
 
-function uniqueNonEmpty(arr) {
-  var seen = {};
-  var out = [];
-  for (var i = 0; i < arr.length; i++) {
-    var v = (arr[i] || "").trim();
-    if (!v || seen[v]) continue;
-    seen[v] = true;
-    out.push(v);
-  }
-  return out;
+function pad2(n) {
+  return n < 10 ? "0" + n : "" + n;
 }
 
 function hostOf(url) {
   var m = String(url || "").match(/^https?:\/\/([^\/:]+)/i);
   return m ? m[1].toLowerCase() : "";
+}
+
+function originOf(url) {
+  var m = String(url || "").match(/^(https?:\/\/[^\/]+)/i);
+  return m ? m[1] : "";
+}
+
+// Turn protocol-relative (`//host/x`) or root-relative (`/x`) iframe srcs into
+// absolute URLs.
+function normalizeUrl(url, base) {
+  var u = String(url || "").trim();
+  if (!u) return "";
+  if (u.indexOf("//") === 0) return "https:" + u;
+  if (u.charAt(0) === "/") return originOf(base) + u;
+  return u;
+}
+
+function decodeEntities(str) {
+  return String(str || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x2B;/gi, "+");
+}
+
+function encodeForm(obj) {
+  var parts = [];
+  for (var k in obj) {
+    if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+    parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(obj[k] == null ? "" : obj[k]));
+  }
+  return parts.join("&");
 }
 
 // ─── Dean Edwards packer unpacker (player configs) ───────────────────────────
@@ -158,8 +186,13 @@ function bucketQuality(height) {
 }
 
 async function inferQuality(url, headers) {
+  // Only master playlists are cheap to inspect; never fetch a whole MP4.
+  if (!/\.m3u8(\?|$)/i.test(url)) return "Auto";
   try {
-    var text = await fetchText(url, headers);
+    var text = await fetchWithTimeout(url, { headers: headers }, 4000).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.text();
+    });
     var best = 0;
     var re = /RESOLUTION=\d+x(\d+)/gi;
     var m;
@@ -228,11 +261,79 @@ function extractIframeSrc(html) {
   return m ? m[1].trim() : "";
 }
 
-function playerIdFromUrl(url) {
-  var m = String(url || "").match(/\/e\/([^\/?#]+)/);
-  if (m) return m[1];
-  var parts = String(url || "").split("?")[0].split("/");
-  return parts[parts.length - 1] || "";
+// Collect every hidden input (ASP.NET viewstate etc.) needed to replay a
+// postback.
+function parseHiddenInputs(html) {
+  var out = {};
+  var re = /<input[^>]*type=["']hidden["'][^>]*>/gi;
+  var m;
+  while ((m = re.exec(html))) {
+    var tag = m[0];
+    var name = (tag.match(/\bname=["']([^"']+)["']/i) || [])[1];
+    var value = (tag.match(/\bvalue=["']([^"]*)["']/i) || [])[1];
+    if (name) out[name] = decodeEntities(value || "");
+  }
+  return out;
+}
+
+// Parse the `<select>` that switches servers (DropDownList1 on movie pages,
+// DDLplayer on episode pages).
+function parseServerSelect(html) {
+  var sel = html.match(/<select[^>]*\bname=["']([^"']*(?:DropDownList1|DDLplayer)[^"']*)["'][^>]*>([\s\S]*?)<\/select>/i);
+  if (!sel) return null;
+  var options = [];
+  var re = /<option[^>]*\bvalue=["']([^"]*)["'][^>]*>([\s\S]*?)<\/option>/gi;
+  var m;
+  while ((m = re.exec(sel[2]))) {
+    var text = decodeEntities(m[2].replace(/<[^>]+>/g, "")).trim();
+    if (!m[1] && !text) continue;
+    options.push({ value: m[1], text: text, selected: /\bselected\b/i.test(m[0]) });
+  }
+  return { name: sel[1], options: options };
+}
+
+function cleanServerName(text) {
+  return String(text || "").replace(/^\s*\d+\s*[-.)]\s*/, "").trim();
+}
+
+// Return [{ name, iframe }] for every server in the page's dropdown by
+// replaying the ASP.NET postback for each option.
+async function collectServerIframes(pageUrl, html) {
+  var initial = extractIframeSrc(html);
+  var select = parseServerSelect(html);
+  if (!select || !select.options.length) {
+    return initial ? [{ name: "Default", iframe: initial }] : [];
+  }
+
+  var hidden = parseHiddenInputs(html);
+  var servers = [];
+  var jobs = [];
+
+  select.options.forEach(function (opt) {
+    if (!opt.value) return;
+    var name = cleanServerName(opt.text) || opt.value;
+    if (opt.selected && initial) {
+      servers.push({ name: name, iframe: initial });
+      return;
+    }
+    var body = Object.assign({}, hidden, {
+      __EVENTTARGET: select.name,
+      __EVENTARGUMENT: ""
+    });
+    body[select.name] = opt.value;
+    jobs.push(
+      fetchTextPost(pageUrl, encodeForm(body), {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Referer: pageUrl
+      }, 8000).then(function (resHtml) {
+        var src = extractIframeSrc(resHtml);
+        if (src) servers.push({ name: name, iframe: normalizeUrl(src, pageUrl) });
+      }).catch(function () {})
+    );
+  });
+
+  await Promise.all(jobs);
+  return servers;
 }
 
 // Split the series page into season blocks and return [{ season, stype }].
@@ -259,35 +360,93 @@ function parseSeasons(html) {
 
 // ─── Player resolution ───────────────────────────────────────────────────────
 
-async function resolvePlayer(iframeUrl) {
-  var id = playerIdFromUrl(iframeUrl);
-  if (!id) return null;
-
-  var candidates = uniqueNonEmpty([hostOf(iframeUrl)].concat(PLAYER_HOSTS));
-  for (var i = 0; i < candidates.length; i++) {
-    var host = candidates[i];
-    var origin = "https://" + host;
-    var pageUrl = origin + "/e/" + id;
-    try {
-      var html = await fetchText(pageUrl, { Referer: origin + "/" });
-      if (html.length < 800) continue;
-      var links = extractPlayerLinks(html);
-      if (!links) continue;
-      var streamUrl = pickPlayerUrl(links, origin);
-      if (!streamUrl) continue;
-      console.log("[" + PROVIDER_NAME + "] Resolved player " + host + " -> " + streamUrl.slice(0, 80) + "...");
-      return { url: streamUrl, host: host, origin: origin };
-    } catch (e) {
-      console.log("[" + PROVIDER_NAME + "] Player " + host + " failed: " + e.message);
-    }
-  }
-  return null;
+function isUsableStream(url) {
+  if (!url || typeof url !== "string") return false;
+  if (DECOY_RE.test(url)) return false;
+  return /\.(m3u8|mp4|txt)(\?|$)|\/master\.|\/hls\d?\//i.test(url) || url.indexOf(".m3u8") !== -1;
 }
 
-function makeStream(resolved, streamTitle, quality, extraName) {
-  var label = resolved.host.replace(/\.(com|to|net|space|cyou|xyz)$/i, "");
+// Pull every plausible direct-stream URL out of a (possibly unpacked) page,
+// preferring HLS playlists.
+function extractStreamUrl(code, base) {
+  var found = [];
+  var patterns = [
+    /"hls4"\s*:\s*"([^"]+)"/, /'hls4'\s*:\s*'([^']+)'/,
+    /"hls2"\s*:\s*"([^"]+)"/, /'hls2'\s*:\s*'([^']+)'/,
+    /"hls3"\s*:\s*"([^"]+)"/, /'hls3'\s*:\s*'([^']+)'/,
+    /"hls"\s*:\s*"([^"]+)"/, /'hls'\s*:\s*'([^']+)'/,
+    /file\s*:\s*["']([^"']+)["']/i,
+    /sources\s*:\s*\[\s*["']([^"']+)["']/i,
+    /["'](https?:\/\/[^"']+\.(?:m3u8|mp4)[^"']*)["']/i,
+    /(https?:\/\/[^"'\s\\]+\.(?:m3u8|mp4)[^"'\s\\]*)/i
+  ];
+  for (var i = 0; i < patterns.length; i++) {
+    var m = code.match(patterns[i]);
+    if (!m) continue;
+    var u = m[1];
+    if (!u) continue;
+    if (u.indexOf("//") === 0) u = "https:" + u;
+    else if (u.charAt(0) === "/") u = base + u;
+    if (isUsableStream(u)) found.push(u);
+  }
+  // Also catch the `links = { hls4: ... }` shape (unquoted keys) if JSON failed.
+  var links = extractPlayerLinks(code);
+  if (links) {
+    var picked = pickPlayerUrl(links, base);
+    if (picked && isUsableStream(picked)) found.push(picked);
+  }
+  for (var j = 0; j < found.length; j++) if (/\.m3u8/i.test(found[j])) return found[j];
+  for (var k = 0; k < found.length; k++) if (/\.mp4/i.test(found[k])) return found[k];
+  return found[0] || null;
+}
+
+async function resolveEmbed(iframeUrl) {
+  var url = normalizeUrl(iframeUrl, BASE_URL);
+  if (!url || url.indexOf("http") !== 0) return null;
+  var host = hostOf(url);
+  var origin = originOf(url);
+  var code;
+  var finalUrl = url;
+  try {
+    var res = await fetchWithTimeout(url, {
+      headers: { Referer: origin + "/", Origin: origin, "Accept-Language": "en-US,en;q=0.9" },
+      redirect: "follow"
+    }, 8000);
+    code = await res.text();
+    finalUrl = res.url || url;
+  } catch (e) {
+    return null;
+  }
+  var origin2 = originOf(finalUrl) || origin;
+
+  // VOE hides the real source behind a redirect + anti-bot; the decoy
+  // test-videos URL is rejected by isUsableStream so this safely yields null.
+  var redir = code.match(/window\.location(?:\.href)?\s*=\s*['"]([^'"]+)['"]/);
+  if (redir && redir[1] !== url) {
+    try {
+      var res2 = await fetchWithTimeout(redir[1], {
+        headers: { Referer: origin2 + "/" },
+        redirect: "follow"
+      }, 8000);
+      code = await res2.text();
+      origin2 = originOf(res2.url) || origin2;
+    } catch (e) {}
+  }
+
+  if (code.indexOf("eval(function") !== -1) {
+    var unpacked = unpackJs(code);
+    if (unpacked) code = unpacked;
+  }
+
+  var streamUrl = extractStreamUrl(code, origin2);
+  if (!streamUrl) return null;
+  return { url: streamUrl, host: host, origin: origin2 };
+}
+
+function makeStream(resolved, streamTitle, quality, serverName) {
+  var label = serverName || resolved.host.replace(/\.(com|to|net|space|cyou|xyz|biz)$/i, "");
   return {
-    name: PROVIDER_NAME + " [" + label + (extraName ? " · " + extraName : "") + "]",
+    name: PROVIDER_NAME + " [" + label + " · KU Sub]",
     title: streamTitle + " · " + quality,
     url: resolved.url,
     quality: quality,
@@ -327,12 +486,12 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       (isMovie ? "" : " S" + pad2(s) + "E" + pad2(e)) +
       (year ? " (" + year + ")" : "");
 
-    var iframeUrl = "";
+    var pageUrl;
+    var pageHtml;
     if (isMovie) {
-      var movieUrl = BASE_URL + "/online.aspx?movieid=" + encodeURIComponent(entry.db_id);
-      console.log("[" + PROVIDER_NAME + "] Movie page: " + movieUrl);
-      var movieHtml = await fetchText(movieUrl);
-      iframeUrl = extractIframeSrc(movieHtml);
+      pageUrl = BASE_URL + "/online.aspx?movieid=" + encodeURIComponent(entry.db_id);
+      console.log("[" + PROVIDER_NAME + "] Movie page: " + pageUrl);
+      pageHtml = await fetchText(pageUrl);
     } else {
       var seriesUrl = BASE_URL + "/Episodes.aspx?type=" + encodeURIComponent(entry.db_id);
       console.log("[" + PROVIDER_NAME + "] Series page: " + seriesUrl);
@@ -346,31 +505,41 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         console.log("[" + PROVIDER_NAME + "] Season " + s + " not found");
         return [];
       }
-      var epUrl = BASE_URL + "/Episodes2.aspx?type=" + encodeURIComponent(entry.db_id) +
+      pageUrl = BASE_URL + "/Episodes2.aspx?type=" + encodeURIComponent(entry.db_id) +
         "&Stype=" + encodeURIComponent(target.stype) + "&name=" + pad2(e);
-      console.log("[" + PROVIDER_NAME + "] Episode page: " + epUrl);
-      var epHtml = await fetchText(epUrl);
-      iframeUrl = extractIframeSrc(epHtml);
+      console.log("[" + PROVIDER_NAME + "] Episode page: " + pageUrl);
+      pageHtml = await fetchText(pageUrl);
     }
 
-    if (!iframeUrl) {
+    var serverIframes = await collectServerIframes(pageUrl, pageHtml);
+    if (!serverIframes.length) {
       console.log("[" + PROVIDER_NAME + "] No player found on page");
       return [];
     }
-    console.log("[" + PROVIDER_NAME + "] Player iframe: " + iframeUrl);
+    console.log("[" + PROVIDER_NAME + "] Servers: " +
+      serverIframes.map(function (x) { return x.name; }).join(", "));
 
-    var resolved = await resolvePlayer(iframeUrl);
-    if (!resolved) {
-      console.log("[" + PROVIDER_NAME + "] Could not resolve player");
-      return [];
-    }
+    var resolvedList = await Promise.all(serverIframes.map(function (srv) {
+      return resolveEmbed(srv.iframe).then(function (r) {
+        return r ? { resolved: r, name: srv.name } : null;
+      });
+    }));
+    var pending = resolvedList.filter(Boolean);
 
-    var quality = await inferQuality(resolved.url, {
-      "User-Agent": UA,
-      "Referer": resolved.origin + "/"
-    });
+    var seen = {};
+    var streams = [];
+    await Promise.all(pending.map(async function (item) {
+      if (seen[item.resolved.url]) return;
+      seen[item.resolved.url] = true;
+      var quality = await inferQuality(item.resolved.url, {
+        "User-Agent": UA,
+        "Referer": item.resolved.origin + "/"
+      });
+      streams.push(makeStream(item.resolved, streamTitle, quality, item.name));
+      console.log("[" + PROVIDER_NAME + "] " + item.name + " -> " +
+        item.resolved.url.slice(0, 80) + "...");
+    }));
 
-    var streams = [makeStream(resolved, streamTitle, quality, "KU Sub")];
     console.log("[" + PROVIDER_NAME + "] Done: " + streams.length + " stream(s)");
     return streams;
 
