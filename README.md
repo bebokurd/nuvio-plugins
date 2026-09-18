@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎬 Ray's Plugins
+# 🎬 CHYA Plugins
 
 **A curated collection of streaming plugins for the Nuvio app**
 
@@ -125,6 +125,6 @@ A huge thanks to these amazing people:
 
 <div align="center">
 
-**© Ray's Plugins** · Made for the streaming community · Educational purposes only
+**© CHYA Plugins** · Made for the streaming community · Educational purposes only
 
 </div>
