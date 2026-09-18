@@ -223,6 +223,19 @@
       "contentLanguage": ["ku", "en"]
     },
     {
+      "id": "nuvio-arabictoons",
+      "name": "ArabicToons",
+      "description": "Arabic dubbed anime series and animated movies with direct MP4 links (~7s)",
+      "version": "1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": ["movie", "tv", "anime"],
+      "filename": "providers/arabictoons.js",
+      "enabled": true,
+      "formats": ["mp4"],
+      "logo": "https://www.google.com/s2/favicons?domain=arabic-toons.com&sz=256",
+      "contentLanguage": ["ar"]
+    },
+    {
       "id": "nuvio-tokyoinsider",
       "name": "TokyoInsider",
       "description": "TokyoInsider streaming with high-quality links, sub or dub (~7s)",
