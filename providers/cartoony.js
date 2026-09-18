@@ -160,6 +160,7 @@ async function getTMDBInfo(tmdbId, mediaType) {
   var titles = [];
   var primary = "";
   var year = "";
+  var numSeasons = 0;
   try {
     var res = await fetchWithTimeout(
       "https://api.themoviedb.org/3/" + type + "/" + tmdbId + "?api_key=" + TMDB_API_KEY
@@ -169,6 +170,7 @@ async function getTMDBInfo(tmdbId, mediaType) {
       titles.push(d.title, d.name, d.original_title, d.original_name);
       primary = d.title || d.name || "";
       year = (d.first_air_date || d.release_date || "").split("-")[0];
+      numSeasons = Number(d.number_of_seasons) || 0;
     }
   } catch (e) {
     console.log("[Cartoony] TMDB error: " + e.message);
@@ -196,8 +198,36 @@ async function getTMDBInfo(tmdbId, mediaType) {
   return {
     primaryTitle: primary,
     year: year,
+    numSeasons: numSeasons,
     titles: uniqueNonEmpty(titles)
   };
+}
+
+// TMDB per-season episode counts (used to map a requested S/E onto the site's
+// flat, single-entry episode list for shows like Danny Phantom / SpongeBob).
+function getSeasonCounts(tmdbId, upTo) {
+  var counts = [];
+  var maxFetch = Math.min(upTo, 6);
+  var s = 1;
+  function next() {
+    if (s > maxFetch) return Promise.resolve(counts);
+    return fetchWithTimeout(
+      "https://api.themoviedb.org/3/tv/" + tmdbId + "/season/" + s + "?api_key=" + TMDB_API_KEY
+    ).then(function (res) {
+      if (res.ok) {
+        return res.json().then(function (d) {
+          counts[s - 1] = (d.episodes || []).length;
+        });
+      }
+      counts[s - 1] = -1;
+    }).catch(function () {
+      counts[s - 1] = -1;
+    }).then(function () {
+      s++;
+      return next();
+    });
+  }
+  return next();
 }
 
 // ─── Local library search ────────────────────────────────────────────────────
@@ -358,19 +388,52 @@ async function resolveSP(entry, episodeId) {
   return d && d.link ? d.link : null;
 }
 
-async function resolveStream(entry, isMovie, reqSeason, reqEpisode, baseTitle) {
+async function resolveStream(entry, isMovie, reqSeason, reqEpisode, baseTitle, tmdbId, numSeasons) {
   var eps;
   if (entry.site === "tg") {
     eps = await apiJson("/api/episodes?id=" + entry.id);
     if (!Array.isArray(eps) || !eps.length) return null;
-    var pick = isMovie ? eps[0] : findEpisode(eps, reqEpisode);
+    if (isMovie) {
+      var pick = eps[0];
+      var url = await resolveTG(entry, pick.id);
+      if (!url) return null;
+      return {
+        site: entry.site,
+        url: url,
+        title: baseTitle,
+        epTitle: String(pick.title || pick.pref || "")
+      };
+    }
+
+    var isFlat = true;
+    var i;
+    for (i = 0; i < eps.length; i++) {
+      if (Number(eps[i].season) > 0) { isFlat = false; break; }
+    }
+    if (splitSeasonTitle(entry.title).season !== null) isFlat = false;
+
+    var targetEp = reqEpisode;
+    var usedOffset = false;
+    if (isFlat && reqSeason > 1 && tmdbId && numSeasons > 1) {
+      var counts = await getSeasonCounts(tmdbId, reqSeason - 1);
+      var offset = 0;
+      for (i = 1; i < reqSeason; i++) {
+        var c = counts[i - 1];
+        offset += (c > 0) ? c : Math.max(1, Math.round(eps.length / numSeasons));
+      }
+      targetEp = offset + reqEpisode;
+      usedOffset = true;
+    }
+
+    pick = findEpisode(eps, targetEp);
+    if (!pick && !usedOffset) pick = findEpisode(eps, reqEpisode);
     if (!pick) return null;
-    var url = await resolveTG(entry, pick.id);
+    url = await resolveTG(entry, pick.id);
     if (!url) return null;
     return {
       site: entry.site,
       url: url,
-      title: isMovie ? baseTitle : (baseTitle + " S" + pad2(reqSeason) + "E" + pad2(reqEpisode)),
+      title: baseTitle + " S" + pad2(reqSeason) + "E" + pad2(reqEpisode),
       epTitle: String(pick.title || pick.pref || "")
     };
   }
@@ -380,7 +443,7 @@ async function resolveStream(entry, isMovie, reqSeason, reqEpisode, baseTitle) {
   if (!Array.isArray(eps) || !eps.length) return null;
   pick = isMovie ? eps[0] : null;
   if (!pick && !isMovie) {
-    for (var i = 0; i < eps.length; i++) {
+    for (i = 0; i < eps.length; i++) {
       if (Number(eps[i].number) === reqEpisode) { pick = eps[i]; break; }
     }
   }
@@ -441,7 +504,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
     for (var r = 0; r < ranked.length && r < 4; r++) {
       try {
-        var res = await resolveStream(ranked[r].entry, isMovie, reqSeason, reqEpisode, baseTitle + yearText);
+        var res = await resolveStream(ranked[r].entry, isMovie, reqSeason, reqEpisode, baseTitle + yearText, tmdbId, info.numSeasons);
         if (res && res.url) {
           console.log("[Cartoony] Match: " + ranked[r].entry.title + " (score " + ranked[r].score +
             ", " + res.site + ", " + res.epTitle + ")");
