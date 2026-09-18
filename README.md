@@ -6,7 +6,7 @@
 
 Fetch premium streams from a wide variety of providers — movies, series, anime & more — directly inside the app.
 
-[![Plugins](https://img.shields.io/badge/plugins-23-2496ED?style=for-the-badge&logo=appveyor&logoColor=white)](https://github.com/hihihihihiiray/nuvio-plugins)
+[![Plugins](https://img.shields.io/badge/plugins-24-2496ED?style=for-the-badge&logo=appveyor&logoColor=white)](https://github.com/hihihihihiiray/nuvio-plugins)
 [![Nuvio Ready](https://img.shields.io/badge/nuvio%20ready-%E2%9C%93-brightgreen?style=for-the-badge)](https://raw.githubusercontent.com/hihihihihiiray/nuvio-plugins/refs/heads/main/manifest.json)
 [![Content](https://img.shields.io/badge/movies%20%26%20tv%20%26%20anime-4K%2F1080p-FF7F50?style=for-the-badge)](https://github.com/hihihihihiiray/nuvio-plugins)
 [![License](https://img.shields.io/badge/license-Educational%20Only-orange?style=for-the-badge)](LICENSE)
@@ -90,8 +90,9 @@ https://raw.githubusercontent.com/hihihihihiiray/nuvio-plugins/refs/heads/main/m
 | [<img src="https://ruayamo.s-ul.eu/4RPU1nrB" width="24" />](https://postimg.cc/tnNFZ15p) KissKH | 🇰🇷 🇨🇳 🇯🇵 🇹🇭 | Asian Dramas & Movies | 1080p / 720p |
 | [<img src="https://ruayamo.s-ul.eu/8v3IFJsp" width="24" />](https://postimg.cc/DJYGs7yY) TokyoInsider | 🏴󠁧󠁢󠁥󠁮󠁧󠁿 🇯🇵 | Anime (Shows & Movies) | 1080p / 720p |
 | [<img src="https://www.google.com/s2/favicons?domain=arabic-toons.com&sz=64" width="24" />](https://www.arabic-toons.com) ArabicToons | 🇪🇬 | Anime (Shows & Movies) | 1080p / 720p |
+| [<img src="https://www.google.com/s2/favicons?domain=cartoony.net&sz=64" width="24" />](https://cartoony.net) Cartoony | 🇸🇦 | Spacetoon-era Anime (Shows & Movies) | 1080p / 720p |
 
-> **Total plugins: 23** · Highest supported quality is shown in **bold**.
+> **Total plugins: 24** · Highest supported quality is shown in **bold**.
 
 ---
 
