@@ -184,38 +184,42 @@ async function getTMDBInfo(tmdbId, mediaType) {
   var primary = "";
   var year = "";
   var numSeasons = 0;
-  try {
-    var res = await fetchWithTimeout(
-      "https://api.themoviedb.org/3/" + type + "/" + tmdbId + "?api_key=" + TMDB_API_KEY
-    );
-    if (res.ok) {
-      var d = await res.json();
-      titles.push(d.title, d.name, d.original_title, d.original_name);
-      primary = d.title || d.name || "";
-      year = (d.first_air_date || d.release_date || "").split("-")[0];
-      numSeasons = Number(d.number_of_seasons) || 0;
-    }
-  } catch (e) {
+
+  // Detail + Arabic translations are independent — fetch them in parallel.
+  var detailP = fetchWithTimeout(
+    "https://api.themoviedb.org/3/" + type + "/" + tmdbId + "?api_key=" + TMDB_API_KEY
+  ).then(function (res) { return res.ok ? res.json() : null; }).catch(function (e) {
     console.log("[Carateen] TMDB error: " + e.message);
-  }
+    return null;
+  });
 
   // Arabic translated titles (best match for this Arabic site).
-  try {
-    var trRes = await fetchWithTimeout(
-      "https://api.themoviedb.org/3/" + type + "/" + tmdbId + "/translations?api_key=" + TMDB_API_KEY
-    );
-    if (trRes.ok) {
-      var tr = await trRes.json();
-      var list = tr.translations || [];
-      for (var i = 0; i < list.length; i++) {
-        if (String(list[i].iso_639_1).slice(0, 2) === "ar") {
-          var arT = list[i].data.title || list[i].data.name || "";
-          if (arT) titles.push(arT);
-        }
+  var transP = fetchWithTimeout(
+    "https://api.themoviedb.org/3/" + type + "/" + tmdbId + "/translations?api_key=" + TMDB_API_KEY
+  ).then(function (res) { return res.ok ? res.json() : null; }).catch(function (e) {
+    console.log("[Carateen] TMDB translations error: " + e.message);
+    return null;
+  });
+
+  var both = await Promise.all([detailP, transP]);
+  var d = both[0];
+  var tr = both[1];
+
+  if (d) {
+    titles.push(d.title, d.name, d.original_title, d.original_name);
+    primary = d.title || d.name || "";
+    year = (d.first_air_date || d.release_date || "").split("-")[0];
+    numSeasons = Number(d.number_of_seasons) || 0;
+  }
+
+  if (tr) {
+    var list = tr.translations || [];
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].iso_639_1).slice(0, 2) === "ar") {
+        var arT = list[i].data.title || list[i].data.name || "";
+        if (arT) titles.push(arT);
       }
     }
-  } catch (e) {
-    console.log("[Carateen] TMDB translations error: " + e.message);
   }
 
   return cacheSet(ck, {
@@ -267,13 +271,83 @@ var SITE_STRIP = ["فيلم", "كرتون", "مدبلج", "مدبلجة", "مت�
 var TITLE_ALIASES = [
   ["داني الشبح", "danny phantom"],
   ["سبونج بوب سكوير بانتس", "spongebob squarepants"],
+  ["سبونج بوب", "spongebob"],
   ["المحقق كونان", "detective conan"],
   ["توم وجيري", "tom and jerry"],
   ["سكوبي دو", "scooby doo"],
   ["ون بيس", "one piece"],
   ["بوكيمون", "pokemon"],
-  ["بن 10", "ben 10"]
+  ["بن تن", "ben 10"],
+  ["بن 10", "ben 10"],
+  ["فتيات القوة", "powerpuff girls"],
+  ["سلاحف النينجا", "teenage mutant ninja turtles"],
+  ["الباكوغان", "bakugan"],
+  ["غزاة من غانداليا", "bakugan"],
+  ["دراغون بول", "dragon ball"],
+  ["ناروتو", "naruto"],
+  ["فلينستون", "flintstones"],
+  ["أفاتار", "avatar the last airbender"],
+  ["مسخر الهواء", "avatar the last airbender"],
+  ["سونيك بووم", "sonic boom"],
+  ["الكابتن ماجد", "captain tsubasa"],
+  ["المحقق غادجيت", "inspector gadget"],
+  ["غرندايزر", "grendizer"],
+  ["مازنجر", "mazinger"],
+  ["ناوسيكا", "nausicaa"],
+  ["قلعة هاول", "howl"],
+  ["الأميرة مونونوكي", "mononoke"],
+  ["المخطوفة", "spirited away"],
+  ["بونيو", "ponyo"],
+  ["جاري توتورو", "totoro"],
+  ["قبر اليراعات", "grave of the fireflies"],
+  ["كيكي", "kiki"],
+  ["سندريلا", "cinderella"],
+  ["بياض الثلج", "snow white"],
+  ["بينوكيو", "pinocchio"],
+  ["فانتازيا", "fantasia"],
+  ["بيتر بان", "peter pan"],
+  ["علي بابا", "ali baba"],
+  ["السندباد", "sinbad"],
+  ["أبطال الديجيتال", "digimon"],
+  ["كوروكو", "kuroko"],
+  ["ماوكلي", "jungle book"],
+  ["جزيرة الكنز", "treasure island"],
+  ["بي بليد", "beyblade"],
+  ["بي باتل", "beyblade"],
+  ["بوكويو", "pocoyo"],
+  ["غاندام", "gundam"],
+  ["كاندام", "gundam"],
+  ["إنشانتيمالز", "enchantimals"],
+  ["هوت ويلز", "hot wheels"],
+  ["لوبين", "lupin"]
 ];
+
+// Words that carry no identifying value. The word-overlap matcher ignores
+// them, so two unrelated titles can no longer score a match just by sharing
+// "the"/"movie"/"فيلم"/"مدبلج". English entries are already lower-cased by
+// normalizeEn/normalizeAr; Arabic entries are in their normalized form.
+var STOPWORDS = {
+  the: 1, a: 1, an: 1, of: 1, and: 1, or: 1, to: 1, in: 1, on: 1, at: 1,
+  for: 1, with: 1, from: 1, by: 1, is: 1, are: 1, be: 1, as: 1, vs: 1,
+  movie: 1, film: 1, series: 1, show: 1, part: 1, season: 1, special: 1,
+  full: 1, hd: 1, feat: 1, vol: 1,
+  فيلم: 1, مسلسل: 1, كرتون: 1, مدبلج: 1, مدبلجه: 1, مترجم: 1, مترجمه: 1,
+  الموسم: 1, موسم: 1, الجزء: 1, جزء: 1, قصص: 1, عالميه: 1, حلقه: 1,
+  الحلقه: 1, جميع: 1, افلام: 1, انمي: 1, الرسوم: 1
+};
+
+// Unique, meaningful, lower-cased/normalized tokens from a title part.
+function meaningWords(words) {
+  var out = [];
+  var seen = {};
+  for (var i = 0; i < words.length; i++) {
+    var w = words[i];
+    if (!w || w.length < 3 || STOPWORDS[w] || seen[w]) continue;
+    seen[w] = 1;
+    out.push(w);
+  }
+  return out;
+}
 
 function cleanSiteTitle(str) {
   var t = normalizeAr(str);
@@ -288,12 +362,21 @@ function arKey(w) {
   return String(w).replace(/^ال/, "");
 }
 
+// True when one space-separated phrase appears as whole words inside the other.
+// Prevents a short generic title part ("أصدقاء") from matching merely because
+// it is embedded in an unrelated name ("تاما والأصدقاء").
+function containsPhrase(hay, needle) {
+  if (!hay || !needle) return false;
+  if (hay === needle) return true;
+  return (" " + hay + " ").indexOf(" " + needle + " ") !== -1;
+}
+
 function nameScore(entry, tmdbTitles) {
   var split = splitSeasonTitle(entry.title);
   var n = cleanSiteTitle(split.base);
   if (!n) return 0;
   var best = 0;
-  var tn, te, w, shared, all, i, a;
+  var tn, te, w, shared, i, a;
 
   // Arabic↔English alias guarantee (works without TMDB Arabic translations).
   for (var q = 0; q < TITLE_ALIASES.length; q++) {
@@ -317,7 +400,7 @@ function nameScore(entry, tmdbTitles) {
       for (i = 0; i < tmdbTitles.length; i++) {
         var tt = normalizeEn(tmdbTitles[i]);
         if (!tt) continue;
-        if (tt === tg) return 93;
+        if (tt === tg && tgWords >= 2) return 93;
         if (tgWords >= 2 && tg.length >= 6 && tt.indexOf(tg) !== -1) return 93;
       }
     }
@@ -327,30 +410,29 @@ function nameScore(entry, tmdbTitles) {
     tn = normalizeAr(tmdbTitles[i]);
     te = normalizeEn(tmdbTitles[i]);
     if (tn && arKey(tn) === arKey(n)) return 100;
-    if (tn && n.length >= 1 && (tn.indexOf(n) !== -1 || n.indexOf(tn) !== -1)) best = Math.max(best, 76);
-    if (tn && arKey(n).length >= 1 &&
-        (arKey(tn).indexOf(arKey(n)) !== -1 || arKey(n).indexOf(arKey(tn)) !== -1)) best = Math.max(best, 76);
+    if (tn && n.length >= 3 && (containsPhrase(tn, n) || containsPhrase(n, tn))) best = Math.max(best, 76);
+    if (tn && arKey(n).length >= 3 &&
+        (containsPhrase(arKey(tn), arKey(n)) || containsPhrase(arKey(n), arKey(tn)))) best = Math.max(best, 76);
     if (te && n.length >= 3) {
       w = te.split(" ");
       for (a = 0; a < w.length; a++) {
-        if (w[a].length >= 3 && normalizeAr(w[a]) === n) best = Math.max(best, 74);
+        if (w[a].length >= 3 && !STOPWORDS[w[a]] && normalizeAr(w[a]) === n) best = Math.max(best, 74);
       }
     }
-    // Arabic word-overlap: all meaningful words of the shorter name appear in the other.
+    // Meaningful word-overlap only: ignore stopwords and duplicates so generic
+    // words ("the", "movie", "فيلم") can no longer create a false match.
     if (tn) {
-      var nw = n.split(" ");
-      var tw = tn.split(" ");
+      var nws = meaningWords(n.split(" "));
+      var tws = meaningWords(tn.split(" "));
       shared = 0;
-      for (a = 0; a < nw.length; a++) {
-        if (nw[a].length < 3) continue;
-        for (var b = 0; b < tw.length; b++) {
-          if (tw[b] === nw[a] || arKey(tw[b]) === arKey(nw[a])) { shared++; break; }
+      for (a = 0; a < nws.length; a++) {
+        for (var b = 0; b < tws.length; b++) {
+          if (tws[b] === nws[a] || arKey(tws[b]) === arKey(nws[a])) { shared++; break; }
         }
       }
       if (shared >= 2) {
-        var total = 0;
-        for (a = 0; a < tw.length; a++) if (tw[a].length >= 3) total++;
-        best = Math.max(best, shared === total ? 88 : 70);
+        if (shared === tws.length) best = Math.max(best, 88);
+        else if (shared * 2 >= tws.length) best = Math.max(best, 70);
       }
     }
   }
@@ -382,47 +464,51 @@ async function loadCatalog(isMovie) {
     return hit;
   }
   var out = [];
-  try {
-    var regs = await apiJson("/api/tvshows");
-    if (Array.isArray(regs)) {
-      for (var i = 0; i < regs.length; i++) {
-        var r = regs[i];
-        if (!r || !r.id) continue;
-        var rMovie = String(r.category || "").indexOf("فيلم") === 0;
-        if (rMovie !== isMovie) continue;
-        out.push({
-          site: "tg",
-          id: r.id,
-          title: r.title || r.name || "",
-          quality: r.quality || "",
-          year: String(r.release_year || "").slice(0, 4),
-          tags: ""
-        });
-      }
+  // Both catalogues are independent — fetch them in parallel.
+  var both = await Promise.all([
+    apiJson("/api/tvshows").catch(function (e) {
+      console.log("[Carateen] Regular catalog failed: " + e.message);
+      return null;
+    }),
+    apiJson("/api/sp/tvshows").catch(function (e) {
+      console.log("[Carateen] SP catalog failed: " + e.message);
+      return null;
+    })
+  ]);
+  var regs = both[0];
+  var sps = both[1];
+
+  if (Array.isArray(regs)) {
+    for (var i = 0; i < regs.length; i++) {
+      var r = regs[i];
+      if (!r || !r.id) continue;
+      var rMovie = String(r.category || "").indexOf("فيلم") === 0;
+      if (rMovie !== isMovie) continue;
+      out.push({
+        site: "tg",
+        id: r.id,
+        title: r.title || r.name || "",
+        quality: r.quality || "",
+        year: String(r.release_year || "").slice(0, 4),
+        tags: ""
+      });
     }
-  } catch (e) {
-    console.log("[Carateen] Regular catalog failed: " + e.message);
   }
-  try {
-    var sps = await apiJson("/api/sp/tvshows");
-    if (Array.isArray(sps)) {
-      for (var j = 0; j < sps.length; j++) {
-        var s = sps[j];
-        if (!s || !s.id) continue;
-        var sMovie = Number(s.is_movie) === 1;
-        if (sMovie !== isMovie) continue;
-        out.push({
-          site: "sp",
-          id: s.id,
-          title: s.name || "",
-          quality: "",
-          year: "",
-          tags: s.tags || ""
-        });
-      }
+  if (Array.isArray(sps)) {
+    for (var j = 0; j < sps.length; j++) {
+      var s = sps[j];
+      if (!s || !s.id) continue;
+      var sMovie = Number(s.is_movie) === 1;
+      if (sMovie !== isMovie) continue;
+      out.push({
+        site: "sp",
+        id: s.id,
+        title: s.name || "",
+        quality: "",
+        year: "",
+        tags: s.tags || ""
+      });
     }
-  } catch (e) {
-    console.log("[Carateen] SP catalog failed: " + e.message);
   }
   if (out.length) cacheSet(ck, out);
   return out;
