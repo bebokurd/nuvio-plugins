@@ -251,8 +251,8 @@
     {
       "id": "nuvio-carateen",
       "name": "Carateen",
-      "description": "Arabic dubbed cartoons and Spacetoon Go shows and animated movies with direct HLS links (~5s)",
-      "version": "1.0",
+      "description": "Arabic dubbed cartoons and Spacetoon Go shows and animated movies with direct HLS links, strict title matching (~5s)",
+      "version": "1.1",
       "author": "Nuvio Team",
       "supportedTypes": ["movie", "tv", "anime"],
       "filename": "providers/carateen.js",
@@ -264,8 +264,8 @@
     {
       "id": "nuvio-kurdcinama",
       "name": "KurdCinema",
-      "description": "Kurdish (Sorani) subtitled movies and TV shows with direct HLS links (~5s)",
-      "version": "1.0",
+      "description": "Kurdish (Sorani) subtitled movies and TV shows — collects every server on the page with direct HLS/MP4 links",
+      "version": "1.1",
       "author": "Nuvio Team",
       "supportedTypes": ["movie", "tv"],
       "filename": "providers/kurdcinama.js",
