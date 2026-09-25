@@ -275,6 +275,19 @@
       "contentLanguage": ["ku", "en"]
     },
     {
+      "id": "nuvio-kurdfilm",
+      "name": "کوردفیلم | KurdFilm",
+      "description": "Kurdish (Sorani & Badini) subtitled movies and TV shows from KurdFilm — multi-server streams with direct HLS & VTT subtitles (~3s)",
+      "version": "1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "providers/kurdfilm.js",
+      "enabled": true,
+      "formats": ["m3u8", "mp4"],
+      "logo": "https://kurdfilm.krd/icon-180.png",
+      "contentLanguage": ["ku", "en"]
+    },
+    {
       "id": "nuvio-tokyoinsider",
       "name": "TokyoInsider",
       "description": "TokyoInsider streaming with high-quality links, sub or dub (~7s)",
