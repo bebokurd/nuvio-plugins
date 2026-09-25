@@ -469,6 +469,11 @@ function cleanServerName(text) {
     .replace(/^\s*\d+\s*[-.)]\s*/, "")
     .trim();
   if (/بێ\s*ریکلام/i.test(s)) return "Fast Server";
+  if (/stream\s*wish/i.test(s)) return "StreamWish";
+  if (/file\s*lions/i.test(s)) return "FileLions";
+  if (/vidmoly/i.test(s)) return "Vidmoly";
+  if (/sendvid/i.test(s)) return "Sendvid";
+  if (/jkr/i.test(s)) return "JKR";
   return s;
 }
 
@@ -595,8 +600,8 @@ async function resolveVidHide(iframeUrl) {
 
 // 3. Vidmoly
 async function resolveVidmoly(iframeUrl) {
-  var url = iframeUrl.replace(/vidmoly\.(net|to|ru|is|biz)/i, "vidmoly.me");
-  var origin = "https://vidmoly.me";
+  var url = iframeUrl;
+  var origin = originOf(iframeUrl) || "https://vidmoly.org";
   try {
     var html = await fetchText(url, {
       Referer: origin + "/",
@@ -606,7 +611,8 @@ async function resolveVidmoly(iframeUrl) {
     // Follow redirect if present
     var redir = html.match(/window\.location\.(?:replace|href)\s*(?:=|\()\s*['"]([^'"]+)['"]/i);
     if (redir && redir[1] && redir[1] !== url) {
-      html = await fetchText(redir[1], { Referer: origin + "/" }, 7000);
+      var nextUrl = normalizeUrl(redir[1], origin);
+      html = await fetchText(nextUrl, { Referer: origin + "/" }, 7000);
     }
 
     var code = html;
@@ -625,9 +631,6 @@ async function resolveVidmoly(iframeUrl) {
 // 4. VOE Decoder
 function decodeVoeCipher(cipher, keyArray) {
   try {
-    var keys = keyArray.replace(/^\[|\]$/g, "").split("','").map(function (k) {
-      return k.replace(/^'+|'+$/g, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    });
     var rot = "";
     for (var i = 0; i < cipher.length; i++) {
       var c = cipher.charCodeAt(i);
@@ -635,10 +638,18 @@ function decodeVoeCipher(cipher, keyArray) {
       else if (c >= 97 && c <= 122) c = (c - 84) % 26 + 97;
       rot += String.fromCharCode(c);
     }
-    for (var j = 0; j < keys.length; j++) {
-      rot = rot.split(new RegExp(keys[j], "g")).join("_");
+    if (keyArray) {
+      var keys = keyArray.replace(/^\[|\]$/g, "").split("','").map(function (k) {
+        return k.replace(/^'+|'+$/g, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      });
+      for (var j = 0; j < keys.length; j++) {
+        rot = rot.split(new RegExp(keys[j], "g")).join("_");
+      }
+      rot = rot.split("_").join("");
+    } else {
+      // Noise tokens in VOE are non-base64 punctuation (!~@*%?#&^$)
+      rot = rot.replace(/[^A-Za-z0-9+/=]/g, "");
     }
-    rot = rot.split("_").join("");
     var b64 = base64Decode(rot);
     if (!b64) return null;
 
@@ -668,20 +679,36 @@ async function resolveVOE(iframeUrl) {
       html = await fetchText(pageUrl, { Referer: origin + "/" }, 7000);
     }
 
-    // Check for JSON token array + script loader
-    var jsonScript = html.match(/json">\s*\[\s*['"]([^'"]+)['"]\s*\]\s*<\/script>\s*<script[^>]*src=['"]([^'"]+)['"]/i);
+    // Check for JSON token array in script tag
+    var jsonScript = html.match(/type=["']application\/json["'][^>]*>\s*\[\s*["']([^"']+)["']\s*\]\s*<\/script>/i) ||
+                     html.match(/json">\s*\[\s*['"]([^'"]+)['"]\s*\]\s*<\/script>/i);
     if (jsonScript) {
       var cipherText = jsonScript[1];
-      var scriptUrl = jsonScript[2].indexOf("http") === 0 ? jsonScript[2] : origin + jsonScript[2];
-      var scriptBody = await fetchText(scriptUrl, { Referer: pageUrl }, 6000);
-      var keyArrayMatch = scriptBody.match(/(\[(?:'[^']{1,10}'[\s,]*){4,12}\])/i) ||
-                          scriptBody.match(/(\[(?:"[^"]{1,10}"[,\s]*){4,12}\])/i);
-      if (keyArrayMatch) {
-        var decoded = decodeVoeCipher(cipherText, keyArrayMatch[1]);
-        if (decoded && (decoded.source || decoded.direct_access_url)) {
-          var directUrl = decoded.source || decoded.direct_access_url;
+      var decoded = decodeVoeCipher(cipherText);
+      if (decoded) {
+        var directUrl = decoded.source || decoded.direct_access_url || decoded.file || decoded.hls || decoded.mp4;
+        if (directUrl && isUsableStream(directUrl)) {
           return { url: directUrl, origin: origin };
         }
+      }
+
+      var scriptMatch = html.match(/<script[^>]*src=['"]([^'"]*loader[^'"]*\.js)['"]/i);
+      if (scriptMatch) {
+        try {
+          var scriptUrl = scriptMatch[1].indexOf("http") === 0 ? scriptMatch[1] : origin + scriptMatch[1];
+          var scriptBody = await fetchText(scriptUrl, { Referer: pageUrl }, 6000);
+          var keyArrayMatch = scriptBody.match(/(\[(?:'[^']{1,10}'[\s,]*){4,12}\])/i) ||
+                              scriptBody.match(/(\[(?:"[^"]{1,10}"[,\s]*){4,12}\])/i);
+          if (keyArrayMatch) {
+            var decoded2 = decodeVoeCipher(cipherText, keyArrayMatch[1]);
+            if (decoded2) {
+              var directUrl2 = decoded2.source || decoded2.direct_access_url || decoded2.file || decoded2.hls || decoded2.mp4;
+              if (directUrl2 && isUsableStream(directUrl2)) {
+                return { url: directUrl2, origin: origin };
+              }
+            }
+          }
+        } catch (e) {}
       }
     }
 
@@ -730,7 +757,7 @@ async function resolveGenericEmbed(iframeUrl) {
     var resSw = await resolveStreamWish(url);
     if (resSw) return resSw;
   }
-  if (/vidhide|filelions|callistanise|dintezuvio|minochinos/i.test(host)) {
+  if (/vidhide|filelions|morencius|callistanise|dintezuvio|minochinos|filmhide|vidpro/i.test(host)) {
     var resVh = await resolveVidHide(url);
     if (resVh) return resVh;
   }
@@ -738,7 +765,7 @@ async function resolveGenericEmbed(iframeUrl) {
     var resVm = await resolveVidmoly(url);
     if (resVm) return resVm;
   }
-  if (/voe\.sx|jamesbornmain|robertthathere/i.test(host)) {
+  if (/voe\.sx|jamesbornmain|robertthathere|yugoteam|repack|audiodelivery|delivery|chasingglow/i.test(host)) {
     var resVoe = await resolveVOE(url);
     if (resVoe) return resVoe;
   }
@@ -756,6 +783,14 @@ async function resolveGenericEmbed(iframeUrl) {
     var streamUrl = extractStreamFromCode(code, origin);
     if (streamUrl) {
       return { url: streamUrl, origin: origin };
+    }
+
+    // Check for nested iframe
+    var innerIframe = extractIframeSrc(html);
+    if (innerIframe && innerIframe !== url) {
+      var nextUrl = normalizeUrl(innerIframe, url);
+      var resInner = await resolveGenericEmbed(nextUrl);
+      if (resInner) return resInner;
     }
   } catch (e) {}
 
