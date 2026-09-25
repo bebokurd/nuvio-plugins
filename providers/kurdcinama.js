@@ -347,13 +347,73 @@ async function findKurdcinemaEntry(tmdbId, mediaType, tmdbInfo) {
 
 // ─── Series Season & Episode Parsing ──────────────────────────────────────────
 
+var KURDISH_ORDINALS = {
+  "یەکەم": 1, "يەكەم": 1, "1": 1,
+  "دووەم": 2, "دووه‌م": 2, "دووهەم": 2, "2": 2,
+  "سێهەم": 3, "سێیەم": 3, "سێیە‌م": 3, "3": 3,
+  "چوارەم": 4, "چواره‌م": 4, "4": 4,
+  "پێنجەم": 5, "پێنجه‌م": 5, "5": 5,
+  "شەشەم": 6, "شه‌شه‌م": 6, "6": 6,
+  "حەوتەم": 7, "حه‌وته‌م": 7, "7": 7,
+  "هەشتەم": 8, "هه‌شته‌م": 8, "8": 8,
+  "نۆیەم": 9, "نۆیه‌م": 9, "9": 9,
+  "دەیەم": 10, "ده‌یه‌م": 10, "10": 10,
+  "یازدەیەم": 11, "11": 11,
+  "دوازدەیەم": 12, "12": 12,
+  "سیازدەیەم": 13, "13": 13,
+  "چواردەیەم": 14, "14": 14,
+  "پازدەیەم": 15, "15": 15,
+  "شازدەیەم": 16, "16": 16,
+  "حەڤدەیەم": 17, "17": 17,
+  "هەژدەیەم": 18, "18": 18,
+  "نۆزدەیەم": 19, "19": 19,
+  "بیستەم": 20, "20": 20
+};
+
+function parseKurdishSeasonNumber(str, defaultNum) {
+  var s = String(str || "").trim().toLowerCase();
+  for (var key in KURDISH_ORDINALS) {
+    if (s.indexOf(key) !== -1) return KURDISH_ORDINALS[key];
+  }
+  var numMatch = s.match(/\b(\d+)\b/);
+  if (numMatch) return parseInt(numMatch[1], 10);
+  return defaultNum;
+}
+
 function parseSeasons(html) {
   var seasons = [];
   var blocks = html.split(/class=["']season-block["']/i).slice(1);
+
   if (blocks.length) {
     for (var i = 0; i < blocks.length; i++) {
-      var m = blocks[i].match(/Stype=(\d+)/i);
-      if (m) seasons.push({ season: i + 1, stype: m[1] });
+      var block = blocks[i];
+      var stypeMatch = block.match(/Stype=(\d+)/i);
+      if (!stypeMatch) continue;
+      var stype = stypeMatch[1];
+
+      var sNameMatch = block.match(/data-season=["']([^"']+)["']/i) ||
+                       block.match(/id=["']season-([^"']+)["']/i) ||
+                       block.match(/class=["']season-title["'][^>]*>([\s\S]*?)<\/h2>/i);
+      var seasonNum = sNameMatch ? parseKurdishSeasonNumber(sNameMatch[1], i + 1) : (i + 1);
+
+      var episodes = {};
+      var epRe = /<a\s+[^>]*href=["']([^"']*Episodes2\.aspx[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
+      var epM;
+      while ((epM = epRe.exec(block))) {
+        var href = epM[1];
+        var inner = epM[2];
+        var nameMatch = href.match(/name=(\d+)/i) || inner.match(/class=["']episode-btn__number["'][^>]*>(\d+)<\/span>/i);
+        if (nameMatch) {
+          var epNum = parseInt(nameMatch[1], 10);
+          episodes[epNum] = href;
+        }
+      }
+
+      seasons.push({
+        season: seasonNum,
+        stype: stype,
+        episodes: episodes
+      });
     }
     return seasons;
   }
@@ -365,7 +425,7 @@ function parseSeasons(html) {
     if (seen.indexOf(mm[1]) === -1) seen.push(mm[1]);
   }
   for (var j = 0; j < seen.length; j++) {
-    seasons.push({ season: j + 1, stype: seen[j] });
+    seasons.push({ season: j + 1, stype: seen[j], episodes: {} });
   }
   return seasons;
 }
@@ -626,9 +686,10 @@ async function resolveVOE(iframeUrl) {
     }
 
     // Fallback: base64 encoded stream in page
-    var b64Matches = html.matchAll(/(?:mp4|hls)['"]\s*:\s*['"]([^'"]+)['"]/gi);
-    for (var m of b64Matches) {
-      var val = m[1];
+    var b64Re = /(?:mp4|hls)['"]\s*:\s*['"]([^'"]+)['"]/gi;
+    var b64m;
+    while ((b64m = b64Re.exec(html))) {
+      var val = b64m[1];
       if (val && val.indexOf("aHR0") === 0) {
         var decUrl = base64Decode(val);
         if (isUsableStream(decUrl)) return { url: decUrl, origin: origin };
@@ -794,8 +855,13 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         return [];
       }
 
-      pageUrl = BASE_URL + "/Episodes2.aspx?type=" + encodeURIComponent(entry.db_id) +
-        "&Stype=" + encodeURIComponent(targetSeason.stype) + "&name=" + pad2(e);
+      var epHref = targetSeason.episodes && targetSeason.episodes[e];
+      if (epHref) {
+        pageUrl = normalizeUrl(epHref, BASE_URL);
+      } else {
+        pageUrl = BASE_URL + "/Episodes2.aspx?type=" + encodeURIComponent(entry.db_id) +
+          "&Stype=" + encodeURIComponent(targetSeason.stype) + "&name=" + pad2(e);
+      }
       console.log("[" + PROVIDER_NAME + "] Episode page: " + pageUrl);
       pageHtml = await fetchText(pageUrl);
     }
