@@ -262,6 +262,19 @@
       "contentLanguage": ["ar"]
     },
     {
+      "id": "nuvio-wecima",
+      "name": "وى سيما | WeCima",
+      "description": "Arabic dubbed and subtitled movies and TV shows from WeCima / MyCima with multi-server streams (~5s)",
+      "version": "1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": ["movie", "tv", "anime"],
+      "filename": "providers/wecima.js",
+      "enabled": true,
+      "formats": ["m3u8", "mp4"],
+      "logo": "https://www.google.com/s2/favicons?domain=wecima.cx&sz=256",
+      "contentLanguage": ["ar", "en"]
+    },
+    {
       "id": "nuvio-kurdcinama",
       "name": "کوردسینەما | KurdCinema",
       "description": "Kurdish (Sorani) subtitled movies and TV shows from KurdCinema — fast AJAX search with multi-server direct stream extraction (~4s)",
