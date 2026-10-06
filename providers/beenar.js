@@ -626,13 +626,37 @@ async function resolveMixdrop(iframeUrl) {
 }
 
 // 8. Google Drive preview links
-function resolveGoogleDrive(url) {
+async function resolveGoogleDrive(url) {
   var m = url.match(/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)/);
   if (!m) return null;
-  return {
-    url: "https://drive.google.com/uc?export=download&id=" + m[1],
-    origin: "https://drive.google.com"
-  };
+
+  var fileId = m[1];
+  var direct = "https://drive.google.com/uc?export=download&id=" + fileId;
+
+  // Beenar keeps dead Drive links around, so drop the ones Drive no longer serves
+  try {
+    var probe = await fetchWithTimeout(direct, {
+      method: "GET",
+      headers: { "User-Agent": UA }
+    }, 8000);
+    var ct = (probe.headers.get("content-type") || "").toLowerCase();
+    var isHtml = ct.indexOf("text/html") === 0;
+    var probeText = (!probe.ok || isHtml) ? (await probe.text()).slice(0, 600).toLowerCase() : "";
+
+    if (!probe.ok || /error 404|not found|forbidden|sorry, unable/.test(probeText)) {
+      return { dead: true };
+    }
+
+    // Google serves a virus-scan interstitial for larger files
+    if (isHtml && /name=["']confirm["']/.test(probeText)) {
+      return {
+        url: "https://drive.google.com/uc?export=download&confirm=t&id=" + fileId,
+        origin: "https://drive.google.com"
+      };
+    }
+  } catch (e) {}
+
+  return { url: direct, origin: "https://drive.google.com" };
 }
 
 // Detect the client-side redirect targets some players use (ronemo, europixhd, ...)
@@ -874,31 +898,49 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     var streams = [];
     var seenUrls = {};
     var solvedVideos = {};
+    var deadVideos = {};
+    var pending = [];
 
     for (var i = 0; i < resolvedList.length; i++) {
       var item = resolvedList[i];
       if (!item) continue;
 
       var resolved = item.resolved;
-      var isDirect = !!isUsableStream(resolved.url);
+      if (resolved.dead) {
+        deadVideos[item.video.url] = true;
+        solvedVideos[item.video.url] = true;
+        console.log("[" + PROVIDER_NAME + "] " + serverLabel(item.video) + " -> dead link, skipped");
+        continue;
+      }
+
       if (seenUrls[resolved.url]) continue;
       seenUrls[resolved.url] = true;
       solvedVideos[item.video.url] = true;
 
-      var quality = await inferQuality(resolved.url, {
-        "User-Agent": UA,
-        "Referer": (resolved.origin || BASE_URL) + "/"
-      }, item.video.quality);
-
-      streams.push(makeStream(resolved, streamTitle, quality, serverLabel(item.video), isDirect));
-      console.log("[" + PROVIDER_NAME + "] " + serverLabel(item.video) + " -> " +
-        resolved.url.slice(0, 90) + "...");
+      pending.push({
+        resolved: resolved,
+        video: item.video,
+        isDirect: !!isUsableStream(resolved.url)
+      });
     }
+
+    // Measuring real resolutions hits the network, so do it in parallel
+    streams = await Promise.all(pending.map(async function (p) {
+      var quality = await inferQuality(p.resolved.url, {
+        "User-Agent": UA,
+        "Referer": (p.resolved.origin || BASE_URL) + "/"
+      }, p.video.quality);
+
+      console.log("[" + PROVIDER_NAME + "] " + serverLabel(p.video) + " (" + quality + ") -> " +
+        p.resolved.url.slice(0, 90) + "...");
+
+      return makeStream(p.resolved, streamTitle, quality, serverLabel(p.video), p.isDirect);
+    }));
 
     // Unresolved embeds are still offered so the in-app player can try them
     for (var j = 0; j < videos.length; j++) {
       var v = videos[j];
-      if (solvedVideos[v.url] || seenUrls[v.url]) continue;
+      if (deadVideos[v.url] || solvedVideos[v.url] || seenUrls[v.url]) continue;
       seenUrls[v.url] = true;
       streams.push({
         name: PROVIDER_NAME + " [" + serverLabel(v) + " · Embed]",
@@ -919,7 +961,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       if (a.isDirect !== b.isDirect) return a.isDirect ? -1 : 1;
       return (QUALITY_ORDER[b.quality] || -1) - (QUALITY_ORDER[a.quality] || -1);
     });
-    streams.forEach(function (s) { delete s.isDirect; });
+    streams.forEach(function (st) { delete st.isDirect; });
 
     console.log("[" + PROVIDER_NAME + "] Done: " + streams.length + " stream(s)");
     return streams;
