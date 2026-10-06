@@ -301,6 +301,19 @@
       "contentLanguage": ["ku", "en"]
     },
     {
+      "id": "nuvio-doblaj",
+      "name": "دۆبلاژ | Doblaj",
+      "description": "Kurdish dubbed (Doblaj) movies & series from kurd-movie.com — DooPlay server extraction with direct HLS where available (~4s)",
+      "version": "1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "providers/doblaj.js",
+      "enabled": true,
+      "formats": ["m3u8", "mp4"],
+      "logo": "https://www.google.com/s2/favicons?domain=kurd-movie.com&sz=256",
+      "contentLanguage": ["ku", "en"]
+    },
+    {
       "id": "nuvio-kurdfilm",
       "name": "کوردفیلم | KurdFilm",
       "description": "Kurdish (Sorani & Badini) subtitled movies and TV shows from KurdFilm — multi-server streams with direct HLS & VTT subtitles (~3s)",
