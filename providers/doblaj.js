@@ -13,16 +13,13 @@ var UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, l
 var CACHE_TTL_MS = 20 * 60 * 1000;
 
 // Only Kurdish-dubbed titles belong to this provider
-var DOBLAJ_GENRE_RE = /(^|-)(all-)?doblaj(-|$)/;
-
-// Players that only work inside a browser (their manifests are built by page JS)
-var EMBED_ONLY_HOSTS = /abyssplayer|ok\.ru|vkvideo|vk\.com\/video/i;
+var DOBLAJ_GENRE_RE = /(^|-)(all-)?doblaj(-|$)/i;
 
 // Playable media extensions
 var PLAYABLE_EXT = /\.(m3u8|mp4|mkv)(\?|$)/i;
 
 // Server pages that report an unavailable upload
-var DEAD_FILE_RE = /file is no longer available|no longer available|video (?:has been )?(?:deleted|removed)|expired or has been deleted/i;
+var DEAD_FILE_RE = /file is no longer available|no longer available|video (?:has been )?(?:deleted|removed)|expired or has been deleted|видео заблокировано|файл не найден/i;
 
 // ─── In-Memory Cache ──────────────────────────────────────────────────────────
 
@@ -40,6 +37,7 @@ function cacheGet(key) {
 
 function cacheSet(key, value) {
   _cache[key] = { t: Date.now(), v: value };
+  return value;
 }
 
 // ─── Network Utilities ────────────────────────────────────────────────────────
@@ -58,7 +56,7 @@ function fetchWithTimeout(url, options, timeoutMs) {
   opts.headers = Object.assign({
     "User-Agent": UA,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,ckb;q=0.9"
+    "Accept-Language": "en-US,ckb;q=0.9,ku;q=0.8,ar;q=0.7"
   }, opts.headers || {});
   if (controller) opts.signal = controller.signal;
   return fetch(url, opts).then(function (res) {
@@ -84,6 +82,8 @@ function fetchJson(url, headers, timeoutMs) {
   });
 }
 
+// ─── String and Normalization Utilities ──────────────────────────────────────
+
 function pad2(n) {
   var num = Number(n) || 0;
   return num < 10 ? "0" + num : String(num);
@@ -107,17 +107,58 @@ function normalizeUrl(url, base) {
   return u;
 }
 
+function cleanEmbedUrl(raw, base) {
+  var str = String(raw || "").trim();
+  if (!str) return "";
+  var ifMatch = str.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+  if (ifMatch) str = ifMatch[1];
+  str = str.replace(/["'\s].*$/, "").trim();
+  return normalizeUrl(str, base);
+}
+
+function decodeEntities(str) {
+  return String(str || "")
+    .replace(/&#(\d+);/g, function (_, code) {
+      var num = parseInt(code, 10);
+      return num > 0 && num < 65536 ? String.fromCharCode(num) : "";
+    })
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;|&#039;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ");
+}
+
 function cleanTitle(str) {
   return (str || "")
-    .replace(/[\u064B-\u0652]/g, "")
+    .replace(/[\u064B-\u0652\u0670\u0640\u200C\u200B]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/[\u0649\u064A]/g, "ی")
+    .replace(/ك/g, "ک")
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/gi, " ")
+    .replace(/[^a-z0-9\u0600-\u06FF\s]/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
+var TITLE_STRIP = [
+  "دۆبلاژی کوردی", "دۆبلاژ", "ژێرنووسی کوردی", "ژێرنووس", "ژێرنوس",
+  "کورد-مۆڤی", "کورد مۆڤی", "فلیمی", "فیلمی", "زنجیرەی",
+  "kurdish dubbed", "dubbed", "doblaj", "full movie", "movie"
+];
+
+function stripSiteKeywords(str) {
+  var t = cleanTitle(str);
+  for (var i = 0; i < TITLE_STRIP.length; i++) {
+    t = t.replace(new RegExp("(?:^|\\s)" + TITLE_STRIP[i] + "(?:\\s|$)", "g"), " ");
+  }
+  return t.replace(/\s+/g, " ").trim();
+}
+
 function extractIframeSrc(html) {
-  var m = html.match(/<iframe[^>]*\bsrc=["']([^"']+)["']/i);
+  var m = String(html || "").match(/<iframe[^>]*\bsrc=["']([^"']+)["']/i);
   return m ? m[1].trim() : "";
 }
 
@@ -125,7 +166,7 @@ function extractIframeSrc(html) {
 
 function unpackJs(code) {
   try {
-    var m = code.match(/eval\(function\(p,a,c,k,e,[rd]\)\{.*?\}\s*\('([\s\S]*?)',\s*(\d+),\s*(\d+),\s*'([\s\S]*?)'\.split\('\|'\)/);
+    var m = (code || "").match(/eval\(function\(p,a,c,k,e,[rd]\)\{.*?\}\s*\('([\s\S]*?)',\s*(\d+),\s*(\d+),\s*'([\s\S]*?)'\.split\('\|'\)/);
     if (!m) return null;
     var p = m[1];
     var a = parseInt(m[2], 10);
@@ -158,12 +199,26 @@ async function getTMDBInfo(tmdbId, mediaType) {
 
   var url = "https://api.themoviedb.org/3/" + type + "/" + tmdbId + "?api_key=" + TMDB_API_KEY;
   try {
-    var data = await fetchJson(url);
+    var data = await fetchJson(url, null, 8000);
     var titles = [];
     if (data.title) titles.push(data.title);
     if (data.name) titles.push(data.name);
-    if (data.original_title) titles.push(data.original_title);
-    if (data.original_name) titles.push(data.original_name);
+    if (data.original_title && titles.indexOf(data.original_title) === -1) titles.push(data.original_title);
+    if (data.original_name && titles.indexOf(data.original_name) === -1) titles.push(data.original_name);
+
+    // Fetch Kurdish & Arabic translation titles for better site matching
+    try {
+      var trUrl = "https://api.themoviedb.org/3/" + type + "/" + tmdbId + "/translations?api_key=" + TMDB_API_KEY;
+      var trData = await fetchJson(trUrl, null, 4000);
+      var trList = (trData && trData.translations) || [];
+      for (var i = 0; i < trList.length; i++) {
+        var iso = (trList[i].iso_639_1 || "").toLowerCase();
+        if (iso === "ku" || iso === "ar" || iso === "ckb") {
+          var trTitle = (trList[i].data && (trList[i].data.title || trList[i].data.name)) || "";
+          if (trTitle && titles.indexOf(trTitle) === -1) titles.push(trTitle);
+        }
+      }
+    } catch (eTr) {}
 
     var year = ((data.release_date || data.first_air_date || "").split("-")[0]) || "";
     var info = {
@@ -210,20 +265,6 @@ function parseSearchItems(html) {
   return items;
 }
 
-function decodeEntities(str) {
-  return String(str || "")
-    .replace(/&#(\d+);/g, function (_, code) {
-      var num = parseInt(code, 10);
-      return num > 0 && num < 65536 ? String.fromCharCode(num) : "";
-    })
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;|&apos;|&#039;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ");
-}
-
 async function searchSite(term) {
   var key = "search:" + String(term || "").toLowerCase();
   var cached = cacheGet(key);
@@ -241,38 +282,56 @@ async function searchSite(term) {
 }
 
 function scoreMatch(item, expectedTitles, expectedYear) {
-  var it = cleanTitle(item.name);
-  if (!it) return 0;
+  var itRaw = cleanTitle(item.name);
+  var itClean = stripSiteKeywords(item.name);
+  if (!itRaw && !itClean) return 0;
 
   var yearOk = !expectedYear || !item.year || item.year === String(expectedYear);
-
   var best = 0;
+
   for (var i = 0; i < expectedTitles.length; i++) {
-    var et = cleanTitle(expectedTitles[i]);
-    if (!et) continue;
-    if (it === et && yearOk) return 100;
-    if (it.indexOf(et) !== -1 || et.indexOf(it) !== -1) {
+    var etRaw = cleanTitle(expectedTitles[i]);
+    var etClean = stripSiteKeywords(expectedTitles[i]);
+    if (!etRaw && !etClean) continue;
+
+    if ((itClean === etClean || itClean === etRaw || itRaw === etClean) && yearOk) return 100;
+    if (itClean === etClean) best = Math.max(best, 90);
+
+    if (etClean && (itClean.indexOf(etClean) !== -1 || etClean.indexOf(itClean) !== -1)) {
       best = Math.max(best, yearOk ? 85 : 55);
       continue;
     }
-    var etTokens = et.split(" ").filter(function (t) { return t.length > 2; });
+
+    var etTokens = etClean.split(" ").filter(function (t) { return t.length > 2; });
+    if (!etTokens.length) etTokens = etRaw.split(" ").filter(function (t) { return t.length > 2; });
     if (!etTokens.length) continue;
-    var hits = etTokens.filter(function (t) { return it.indexOf(t) !== -1; }).length;
+
+    var hits = etTokens.filter(function (t) { return itClean.indexOf(t) !== -1 || itRaw.indexOf(t) !== -1; }).length;
     if (hits === etTokens.length) best = Math.max(best, yearOk ? 80 : 50);
     else if (hits >= etTokens.length - 1 && hits > 0) best = Math.max(best, yearOk ? 65 : 40);
   }
+
   return best;
 }
 
-function hasDoblajGenre(html) {
-  var block = (String(html || "").match(/<div class="sgeneros">([\s\S]{0,1200}?)<\/div>/i) || [])[1];
-  if (block === undefined) return false;
-  var genres = (block.match(/\/genre\/([a-z0-9-]+)\//gi) || []).map(function (g) {
-    return g.match(/\/genre\/([a-z0-9-]+)/i)[1];
-  });
-  for (var i = 0; i < genres.length; i++) {
-    if (DOBLAJ_GENRE_RE.test(genres[i])) return true;
+function hasDoblajGenre(html, url, title) {
+  if (DOBLAJ_GENRE_RE.test(url || "")) return true;
+  if (/دۆبلاژ|doblaj/i.test(title || "")) return true;
+
+  var str = String(html || "");
+  if (/<span class=["']quality["'][^>]*>\s*doblaj\s*<\/span>/i.test(str)) return true;
+  if (/genre\/(?:all-)?doblaj/i.test(str)) return true;
+
+  var block = (str.match(/<div class="sgeneros">([\s\S]{0,1200}?)<\/div>/i) || [])[1];
+  if (block !== undefined) {
+    var genres = (block.match(/\/genre\/([a-z0-9-]+)\//gi) || []).map(function (g) {
+      return g.match(/\/genre\/([a-z0-9-]+)/i)[1];
+    });
+    for (var i = 0; i < genres.length; i++) {
+      if (DOBLAJ_GENRE_RE.test(genres[i])) return true;
+    }
   }
+
   return false;
 }
 
@@ -318,11 +377,11 @@ async function findDoblajEntry(tmdbInfo, isMovie) {
     }).sort(function (a, b) { return b.score - a.score; });
 
     for (var k = 0; k < scored.length; k++) {
-      if (scored[k].score < 65) break;
+      if (scored[k].score < 60) break;
 
       var html = await getItemPage(scored[k].item.url);
       if (!html) continue;
-      if (!hasDoblajGenre(html)) {
+      if (!hasDoblajGenre(html, scored[k].item.url, scored[k].item.name)) {
         console.log("[" + PROVIDER_NAME + "] " + scored[k].item.name + " is not tagged doblaj, skipped");
         continue;
       }
@@ -370,14 +429,18 @@ async function resolveOption(option) {
     encodeURIComponent(option.type) + "/" + encodeURIComponent(option.nume);
   try {
     var data = await fetchJson(url, { "Referer": BASE_URL + "/" }, 9000);
-    var embed = normalizeUrl((data && (data.embed_url || data.url || data.src)) || "", BASE_URL);
+    var raw = (data && (data.embed_url || data.url || data.src)) || "";
+    var embed = cleanEmbedUrl(raw, BASE_URL);
     if (!embed || embed.indexOf("http") !== 0) return null;
     if (/youtu\.?be|youtube\.com/i.test(embed)) return null;
+
+    var isDub = !/ژێرنوس|ژێرنووس|sub|subtitled/i.test(option.server);
 
     return {
       server: option.server,
       quality: option.server,
-      url: embed
+      url: embed,
+      isDub: isDub
     };
   } catch (e) {
     return null;
@@ -386,23 +449,37 @@ async function resolveOption(option) {
 
 // Find the episode page for a requested season/episode pair
 function findEpisodeUrl(showHtml, season, episode) {
-  var re = /href=["'](https?:\/\/www\.kurd-movie\.com\/episodes?\/[^"'#?]+)["'][^>]*>([\s\S]{0,160}?)<\/a>/gi;
+  var sNum = Number(season) || 1;
+  var eNum = Number(episode) || 1;
+
+  var re = /href=["'](https?:\/\/www\.kurd-movie\.com\/episodes?\/[^"'#?]+)["'][^>]*>([\s\S]{0,240}?)<\/a>/gi;
   var m;
   var fallback = "";
 
   while ((m = re.exec(showHtml))) {
     var url = m[1];
-    var slug = url.substring(url.lastIndexOf("/") + 1);
-    var se = slug.match(/(\d+)[x-](\d+)$/);
-    if (!se) continue;
+    var inner = m[2];
+    var clean = url.replace(/\/+$/, "");
+    var slug = clean.substring(clean.lastIndexOf("/") + 1);
 
-    if (Number(se[1]) === Number(season) && Number(se[2]) === Number(episode)) return url;
-    if (!fallback && Number(se[1]) === Number(season)) fallback = url;
+    var seSlug = slug.match(/(\d+)[x-](\d+)$/) ||
+                 slug.match(/season-(\d+)-episode-(\d+)/i) ||
+                 slug.match(/s(\d+)e(\d+)/i);
+    if (seSlug) {
+      if (Number(seSlug[1]) === sNum && Number(seSlug[2]) === eNum) return url;
+      if (!fallback && Number(seSlug[1]) === sNum) fallback = url;
+      continue;
+    }
+
+    var numMatch = inner.match(/(?:class=["']numerando["'][^>]*>|\b)(\d+)\s*(?:-|x|–)\s*(\d+)/i) ||
+                   inner.match(/season\s*(\d+)\s*episode\s*(\d+)/i);
+    if (numMatch) {
+      if (Number(numMatch[1]) === sNum && Number(numMatch[2]) === eNum) return url;
+      if (!fallback && Number(numMatch[1]) === sNum) fallback = url;
+    }
   }
 
-  // Some uploads only expose the first playable episode of a season
-  if (fallback) return fallback;
-  return "";
+  return fallback || "";
 }
 
 async function getMovieSources(entryHtml) {
@@ -484,18 +561,19 @@ function extractFromHtml(html, origin) {
   return null;
 }
 
-// 1. StreamWish family (HgCloud, HgLink, Hanerix, UasOpt, ByseZoxexe, ObeyWish, ...)
-var STREAMWISH_HOSTS = /streamwish|obeywish|playerwish|jodwish|strwish|sfastwish|hlswish|swishsrv|audinifer|wishembed|hgcloud|hglink|hanerix|swdyu|swishhub|filesb|buzzfile|1oxa|streamhie|uasopt|bingezove|bysezoxexe|davioad|wishstream|awish/i;
+// 1. StreamWish family (HgCloud, Hanerix, UasOpt, ByseZoxexe, ObeyWish, Swdyu, ...)
+var STREAMWISH_HOSTS = /streamwish|obeywish|playerwish|jodwish|strwish|sfastwish|hlswish|swishsrv|audinifer|wishembed|hgcloud|hglink|hanerix|swdyu|swishhub|filesb|buzzfile|1oxa|streamhie|uasopt|bingezove|bysezoxexe|davioad|wishstream|awish|flaswish|youdbox|dumpor|swtube|swcloud|streamhg/i;
 
 async function resolveStreamWish(iframeUrl) {
-  var codeMatch = iframeUrl.match(/\/(?:e|f)\/([a-zA-Z0-9_-]+)/);
+  var codeMatch = iframeUrl.match(/\/(?:e|f|embed|d)\/([a-zA-Z0-9_-]+)/);
   if (!codeMatch) return null;
   var fileCode = codeMatch[1];
   var ownOrigin = originOf(iframeUrl);
 
+  // Always attempt the origin that hosts the file FIRST
   var mirrors = [
-    "https://obeywish.com",
     ownOrigin,
+    "https://obeywish.com",
     "https://swdyu.com",
     "https://playerwish.com",
     "https://strwish.com",
@@ -520,7 +598,6 @@ async function resolveStreamWish(iframeUrl) {
       }, 7000);
       answered++;
 
-      // the mirrors share one backend, so their verdict covers the whole family
       if (DEAD_FILE_RE.test(html)) {
         deadSeen = true;
         continue;
@@ -531,7 +608,7 @@ async function resolveStreamWish(iframeUrl) {
     } catch (e) {}
   }
 
-  // Some mirrors expose the download route only
+  // Some mirrors only expose the direct download /f/ route
   if (ownOrigin) {
     try {
       var html2 = await fetchText(ownOrigin + "/f/" + fileCode, { "Referer": ownOrigin + "/" }, 7000);
@@ -541,19 +618,21 @@ async function resolveStreamWish(iframeUrl) {
         var s2 = extractFromHtml(html2, ownOrigin);
         if (s2) return { url: s2, origin: ownOrigin };
       }
-    } catch (e) {}
+    } catch (e2) {}
   }
 
-  // The upload is reported as removed, so it is not worth offering
   return (answered > 0 && deadSeen) ? { dead: true } : null;
 }
 
-// 2. VidHide family (Morencius, Minochinos, Dingtezuni, Bingezove, FileLions, ...)
-var VIDHIDE_HOSTS = /vidhide|filelions|morencius|minochinos|dingtezuni|dintezuvio|callistanise|guccihide|fviplions|megacloud|blackcdn|bingezove/i;
+// 2. VidHide family (Morencius, Minochinos, Dingtezuni, Earnvids, FileLions, ...)
+var VIDHIDE_HOSTS = /vidhide|filelions|morencius|minochinos|dingtezuni|dintezuvio|callistanise|guccihide|fviplions|megacloud|blackcdn|bingezove|earnvids?|vidhidepro|vidhidepre|vidhidevip/i;
 
 async function resolveVidHide(iframeUrl) {
   var origin = originOf(iframeUrl);
   if (!origin) return null;
+  var codeMatch = iframeUrl.match(/\/(?:embed|e|v|d)\/([a-zA-Z0-9_-]+)/);
+  var fileCode = codeMatch ? codeMatch[1] : "";
+
   try {
     var html = await fetchText(iframeUrl, {
       "Referer": origin + "/",
@@ -563,25 +642,41 @@ async function resolveVidHide(iframeUrl) {
     var streamUrl = extractFromHtml(html, origin);
     if (streamUrl) return { url: streamUrl, origin: origin };
   } catch (e) {}
+
+  if (fileCode) {
+    var mirrors = ["https://vidhidepre.com/v/", "https://filelions.to/v/", "https://vidhidevip.com/v/"];
+    for (var i = 0; i < mirrors.length; i++) {
+      var mUrl = mirrors[i] + fileCode;
+      var mOrigin = originOf(mUrl);
+      try {
+        var mHtml = await fetchText(mUrl, { "Referer": mOrigin + "/" }, 7000);
+        if (DEAD_FILE_RE.test(mHtml)) continue;
+        var sUrl = extractFromHtml(mHtml, mOrigin);
+        if (sUrl) return { url: sUrl, origin: mOrigin };
+      } catch (eM) {}
+    }
+  }
+
   return null;
 }
 
-// 3. StreamTape (link is assembled from document.write fragments, then exposed by get_video)
+// 3. StreamTape
 async function resolveStreamTape(iframeUrl) {
   var origin = originOf(iframeUrl) || "https://streamtape.com";
-  try {
-    var html = await fetchText(iframeUrl, { "Referer": origin + "/" }, 8000);
-    if (DEAD_FILE_RE.test(html)) return null;
+  var targetUrl = iframeUrl.replace(/\/v\/([a-zA-Z0-9_-]+)/i, "/e/$1");
 
-    var robot = html.match(/robotlink['"]\)\.innerHTML\s*=\s*['"]([^'"]+)['"]\s*\+\s*([^;]+)/);
-    if (robot) {
-      var url = "https:" + robot[1];
-      var parts = robot[2].split("+");
+  try {
+    var html = await fetchText(targetUrl, { "Referer": origin + "/" }, 8000);
+    if (DEAD_FILE_RE.test(html)) return { dead: true };
+
+    var m = html.match(/(?:robotlink|botlink|cphld|ideooLink)['"]\)\.innerHTML\s*=\s*['"]([^'"]+)['"]\s*\+\s*([^;]+)/i);
+    if (m) {
+      var url = "https:" + m[1];
+      var parts = m[2].split("+");
       for (var i = 0; i < parts.length; i++) {
         var chunk = parts[i].match(/['"]([^'"]+)['"]/);
         if (!chunk) continue;
         var value = chunk[1];
-        // the page slices the same string several times, so apply every call in order
         var slices = parts[i].match(/substring\(\d+\)/g) || [];
         for (var j = 0; j < slices.length; j++) {
           value = value.substring(parseInt(slices[j].match(/\d+/)[0], 10));
@@ -589,29 +684,25 @@ async function resolveStreamTape(iframeUrl) {
         url += value;
       }
 
-      if (isUsableStream(url)) return { url: url, origin: origin };
-
-      try {
-        var res = await fetchWithTimeout(url, {
-          headers: { "Referer": origin + "/", "X-Requested-With": "XMLHttpRequest" }
-        }, 6000);
-        var location = res.headers.get("location") || "";
-        if (isUsableStream(location)) return { url: location, origin: origin };
-
-        var body = (await res.text()).trim().replace(/^["']|["']$/g, "");
-        if (isUsableStream(body)) return { url: body, origin: origin };
-      } catch (e2) {}
+      if (url && url.indexOf("http") === 0) {
+        return {
+          url: url,
+          origin: "https://streamtape.com",
+          headers: { "Referer": "https://streamtape.com/" }
+        };
+      }
     }
 
     var direct = extractFromHtml(html, origin);
     if (direct) return { url: direct, origin: origin };
   } catch (e) {}
+
   return null;
 }
 
 // 4. FileMoon (embed page, then the JSON API as backup)
 async function resolveFileMoon(iframeUrl) {
-  var codeMatch = iframeUrl.match(/\/e\/([a-zA-Z0-9]+)/i);
+  var codeMatch = iframeUrl.match(/\/(?:e|d)\/([a-zA-Z0-9_-]+)/i);
   var origin = originOf(iframeUrl) || "https://filemoon.to";
 
   try {
@@ -629,13 +720,171 @@ async function resolveFileMoon(iframeUrl) {
       }, 8000);
       var apiUrl = normalizeUrl(data.hls || data.file || data.url || "", origin);
       if (isUsableStream(apiUrl)) return { url: apiUrl, origin: origin };
-    } catch (e) {}
+    } catch (eApi) {}
   }
 
   return null;
 }
 
-// Detect the client-side redirect targets some players use
+// 5. OK.ru (direct MP4 qualities or HLS manifest extraction)
+async function resolveOkRu(iframeUrl) {
+  var m = iframeUrl.match(/video(?:embed)?\/(\d+)/i);
+  if (!m) return null;
+  var vidId = m[1];
+
+  try {
+    var html = await fetchText("https://www.ok.ru/videoembed/" + vidId, {
+      "Referer": BASE_URL + "/"
+    }, 8000);
+
+    if (DEAD_FILE_RE.test(html) || /видео заблокировано|video has been deleted|файл не найден/i.test(html)) {
+      return { dead: true };
+    }
+
+    var optMatch = html.match(/data-options=["']([^"']+)["']/i);
+    var metadata = null;
+
+    if (optMatch) {
+      try {
+        var optJson = JSON.parse(decodeEntities(optMatch[1]));
+        if (optJson && optJson.flashvars && optJson.flashvars.metadata) {
+          metadata = typeof optJson.flashvars.metadata === "string"
+            ? JSON.parse(optJson.flashvars.metadata)
+            : optJson.flashvars.metadata;
+        }
+      } catch (eOpt) {}
+    }
+
+    if (!metadata) {
+      try {
+        metadata = await fetchJson("https://ok.ru/dk?cmd=videoPlayerMetadata&mid=" + vidId, {
+          "Referer": "https://ok.ru/"
+        }, 6000);
+      } catch (eMeta) {}
+    }
+
+    if (metadata) {
+      if (metadata.hlsManifestUrl && isUsableStream(metadata.hlsManifestUrl)) {
+        return {
+          url: metadata.hlsManifestUrl,
+          origin: "https://ok.ru",
+          quality: "1080p"
+        };
+      }
+
+      if (Array.isArray(metadata.videos) && metadata.videos.length > 0) {
+        var qMap = {
+          ultra: 5,
+          quad: 4,
+          full: 3,
+          hd: 2,
+          sd: 1,
+          low: 0,
+          lowest: -1,
+          mobile: -2
+        };
+        var qLabels = {
+          ultra: "4K",
+          quad: "1440p",
+          full: "1080p",
+          hd: "720p",
+          sd: "480p",
+          low: "360p",
+          lowest: "240p",
+          mobile: "144p"
+        };
+
+        var sorted = metadata.videos.slice().sort(function (a, b) {
+          return (qMap[b.name] || 0) - (qMap[a.name] || 0);
+        });
+
+        for (var i = 0; i < sorted.length; i++) {
+          if (sorted[i].url && sorted[i].url.indexOf("http") === 0) {
+            return {
+              url: sorted[i].url,
+              origin: "https://ok.ru",
+              quality: qLabels[sorted[i].name] || "720p"
+            };
+          }
+        }
+      }
+    }
+  } catch (e) {}
+
+  return null;
+}
+
+// 6. VK / VKVideo
+async function resolveVk(iframeUrl) {
+  try {
+    var html = await fetchText(iframeUrl, { "Referer": BASE_URL + "/" }, 8000);
+    if (DEAD_FILE_RE.test(html)) return { dead: true };
+
+    var hlsMatch = html.match(/["'](https?:\/\/[^"']+\.m3u8[^"']*)["']/i);
+    if (hlsMatch && isUsableStream(hlsMatch[1])) {
+      return { url: hlsMatch[1].replace(/\\\//g, "/"), origin: "https://vkvideo.ru", quality: "1080p" };
+    }
+
+    var qList = ["url2160", "url1440", "url1080", "url720", "url480", "url360"];
+    var labels = { url2160: "4K", url1440: "1440p", url1080: "1080p", url720: "720p", url480: "480p", url360: "360p" };
+    for (var i = 0; i < qList.length; i++) {
+      var re = new RegExp('"' + qList[i] + '"\\s*:\\s*"([^"]+)"', "i");
+      var m = html.match(re);
+      if (m && m[1]) {
+        var u = m[1].replace(/\\\//g, "/");
+        if (u.indexOf("http") === 0) {
+          return { url: u, origin: "https://vkvideo.ru", quality: labels[qList[i]] || "720p" };
+        }
+      }
+    }
+  } catch (e) {}
+
+  return null;
+}
+
+// 7. Uqload
+async function resolveUqload(iframeUrl) {
+  var origin = originOf(iframeUrl) || "https://uqload.io";
+  try {
+    var html = await fetchText(iframeUrl, { "Referer": BASE_URL + "/" }, 8000);
+    var unpacked = unpackJs(html) || html;
+    var m = unpacked.match(/sources:\s*\[\s*["']([^"']+\.(?:m3u8|mp4)[^"']*)["']/i) ||
+            unpacked.match(/https?:\/\/[^"'\s]+\.(?:m3u8|mp4)[^"'\s]*/i);
+    if (m) {
+      return { url: m[1] || m[0], origin: origin, quality: "1080p" };
+    }
+  } catch (e) {}
+  return null;
+}
+
+// 8. Sendvid
+async function resolveSendvid(iframeUrl) {
+  var url = iframeUrl.includes("/embed/") ? iframeUrl : iframeUrl.replace(/sendvid\.com\/([a-z0-9]+)/i, "sendvid.com/embed/$1");
+  try {
+    var html = await fetchText(url, { "Referer": BASE_URL + "/" }, 8000);
+    var m = html.match(/<source[^>]+src=["']([^"']+\.mp4[^"']*)["']/i) ||
+            html.match(/var\s+video_source\s*=\s*["']([^"']+)["']/i);
+    if (m) {
+      return { url: m[1], origin: "https://sendvid.com", quality: "720p" };
+    }
+  } catch (e) {}
+  return null;
+}
+
+// 9. YourUpload
+async function resolveYourUpload(iframeUrl) {
+  try {
+    var html = await fetchText(iframeUrl, { "Referer": BASE_URL + "/" }, 8000);
+    var m = html.match(/file:\s*['"]([^'"]+\.mp4[^'"]*)['']/i) ||
+            html.match(/og:video(?::secure_url)?[^"']+content=["']([^"']+)["']/i);
+    if (m) {
+      return { url: m[1], origin: "https://yourupload.com", quality: "720p" };
+    }
+  } catch (e) {}
+  return null;
+}
+
+// Detect client-side redirect targets
 function extractRedirectTarget(html, currentUrl) {
   var patterns = [
     /window\.location\.href\s*=\s*['"]([^'"]+)['"]/i,
@@ -654,7 +903,7 @@ function extractRedirectTarget(html, currentUrl) {
   return null;
 }
 
-// 5. Generic embed resolver (follows JS / meta redirects and nested iframes)
+// 10. Generic embed resolver (follows JS / meta redirects and nested iframes)
 async function resolveGenericEmbed(iframeUrl, depth) {
   var level = depth || 0;
   var url = normalizeUrl(iframeUrl, BASE_URL);
@@ -668,28 +917,21 @@ async function resolveGenericEmbed(iframeUrl, depth) {
     var streamUrl = extractFromHtml(html, origin);
     if (streamUrl) return { url: streamUrl, origin: origin };
 
-    if (level < 3) {
+    if (level < 2) {
       var inner = extractIframeSrc(html) || extractRedirectTarget(html, url);
       if (inner) {
-        var nextUrl = normalizeUrl(inner, url);
+        var nextUrl = cleanEmbedUrl(inner, url);
         if (nextUrl && nextUrl !== url) {
-          var resInner = await resolveGenericEmbed(nextUrl, level + 1);
+          var resInner = await resolveEmbed(nextUrl, level + 1);
           if (resInner) return resInner;
         }
       }
     }
 
-    // json based players that expose the manifest through a separate endpoint
     var apiMatch = html.match(/["'](https?:\/\/[^"']*(?:sources?|playlist|master)[^"']*\.(?:m3u8|mp4)[^"']*)["']/i);
     if (apiMatch) {
       var apiUrl = apiMatch[1].replace(/\\\//g, "/");
       if (isUsableStream(apiUrl)) return { url: apiUrl, origin: originOf(apiUrl) || origin };
-    }
-
-    // Fresh StreamWish aliases keep the /e/<code> route, so try the mirror chain
-    if (level === 0 && /\/(?:e|f)\/[a-zA-Z0-9_-]+/.test(url)) {
-      var aliased = await resolveStreamWish(url);
-      if (aliased) return aliased;
     }
   } catch (e) {}
 
@@ -697,11 +939,8 @@ async function resolveGenericEmbed(iframeUrl, depth) {
 }
 
 // Master dispatch
-async function resolveEmbed(url) {
+async function resolveEmbed(url, depth) {
   var host = hostOf(url);
-
-  // ok.ru, abyss and vk build their manifests in the browser, so keep the embed as-is
-  if (EMBED_ONLY_HOSTS.test(host)) return null;
 
   if (STREAMWISH_HOSTS.test(host)) {
     var sw = await resolveStreamWish(url);
@@ -711,16 +950,36 @@ async function resolveEmbed(url) {
     var vh = await resolveVidHide(url);
     if (vh) return vh;
   }
-  if (/streamtape|stape/i.test(host)) {
+  if (STREAMTAPE_HOSTS.test(host)) {
     var st = await resolveStreamTape(url);
     if (st) return st;
   }
-  if (/filemoon|moonplayer/i.test(host)) {
+  if (FILEMOON_HOSTS.test(host)) {
     var fm = await resolveFileMoon(url);
     if (fm) return fm;
   }
+  if (/ok\.ru|odnoklassniki/i.test(host)) {
+    var ok = await resolveOkRu(url);
+    if (ok) return ok;
+  }
+  if (/vkvideo\.ru|vk\.com/i.test(host)) {
+    var vk = await resolveVk(url);
+    if (vk) return vk;
+  }
+  if (/uqload/i.test(host)) {
+    var uq = await resolveUqload(url);
+    if (uq) return uq;
+  }
+  if (/sendvid/i.test(host)) {
+    var sv = await resolveSendvid(url);
+    if (sv) return sv;
+  }
+  if (/yourupload/i.test(host)) {
+    var yu = await resolveYourUpload(url);
+    if (yu) return yu;
+  }
 
-  return resolveGenericEmbed(url, 0);
+  return resolveGenericEmbed(url, depth || 0);
 }
 
 // ─── Stream Formatting & Quality ─────────────────────────────────────────────
@@ -739,8 +998,8 @@ function normalizeQualityLabel(value) {
   var q = String(value || "").toLowerCase();
   if (!q) return "Auto";
   if (/2160|4k|uhd/.test(q)) return "4K";
-  if (/1440|2k/.test(q)) return "1440p";
-  if (/1080|qhd|fhd/.test(q)) return "1080p";
+  if (/1440|2k|qhd/.test(q)) return "1440p";
+  if (/1080|fhd/.test(q)) return "1080p";
   if (/720|hd\b/.test(q)) return "720p";
   if (/480|sd\b/.test(q)) return "480p";
   if (/360/.test(q)) return "360p";
@@ -761,13 +1020,13 @@ var QUALITY_ORDER = {
 
 async function inferQuality(url, headers, fallback) {
   var known = normalizeQualityLabel(fallback);
+  if (known !== "Auto") return known;
+
   if (!/\.m3u8(\?|$)/i.test(url)) {
-    if (known !== "Auto") return known;
     var qMatch = url.match(/(2160|1440|1080|720|480|360)p?/i);
-    return qMatch ? qMatch[1] + "p" : "720p";
+    return qMatch ? normalizeQualityLabel(qMatch[1]) : "1080p";
   }
 
-  // Some CDNs only serve the manifest for their own origin, others need the embed origin
   var referers = [originOf(url) + "/"];
   if (headers && headers.Referer && headers.Referer !== referers[0]) referers.push(headers.Referer);
 
@@ -776,7 +1035,7 @@ async function inferQuality(url, headers, fallback) {
       var text = await fetchText(url, {
         "User-Agent": UA,
         "Referer": referers[i]
-      }, 4500);
+      }, 3500);
       var best = 0;
       var re = /RESOLUTION=\d+x(\d+)/gi;
       var m;
@@ -787,49 +1046,76 @@ async function inferQuality(url, headers, fallback) {
       if (best) return bucketQuality(best);
     } catch (e) {}
   }
-  return known !== "Auto" ? known : "720p";
+  return "1080p";
 }
 
-// Some players hand back their own page (or an HTML error) instead of media
+// Media verification
 async function servesMedia(url, headers) {
   if (/\.m3u8(\?|$)/i.test(url)) return true;
   try {
-    var res = await fetchWithTimeout(url, { headers: headers }, 7000);
+    var res = await fetchWithTimeout(url, {
+      method: "HEAD",
+      headers: headers
+    }, 4000);
+
+    if (!res.ok) {
+      res = await fetchWithTimeout(url, {
+        headers: Object.assign({}, headers, { "Range": "bytes=0-1" })
+      }, 4000);
+    }
+
     var ct = (res.headers.get("content-type") || "").toLowerCase();
     try {
-      if (res.body && res.body.cancel) {
-        res.body.cancel().catch(function () {});
-      }
-    } catch (e) {}
-    return /mpegurl|video\/|audio\/|application\/octet-stream|mp4|matroska|quicktime/.test(ct);
+      if (res.body && res.body.cancel) res.body.cancel().catch(function () {});
+    } catch (eBody) {}
+
+    if (/html|text\/plain/.test(ct)) return false;
+    return /mpegurl|video\/|audio\/|application\/octet-stream|mp4|matroska|quicktime|binary/.test(ct) || res.ok;
   } catch (e) {
-    return false;
+    return PLAYABLE_EXT.test(url) || url.indexOf("get_video") !== -1;
   }
 }
 
-function serverLabel(video) {
-  var name = String(video.server || "").trim();
-  if (!name) {
-    var host = hostOf(video.url).replace(/^www\./, "");
-    name = host.split(".")[0];
-  }
-  return name;
+function formatServerName(rawServer, url) {
+  var s = String(rawServer || "").trim();
+  var h = hostOf(url).replace(/^www\./, "");
+
+  if (/streamhg|hanerix|hgcloud|uasopt|bysezoxexe|swdyu|streamwish|obeywish|playerwish|hlswish/i.test(s) || /streamwish|obeywish|hgcloud|hanerix|bysezoxexe|uasopt/i.test(h)) return "StreamWish";
+  if (/vidhide|morencius|minochinos|earnvids?|callistanise|dingtezuni|filelions/i.test(s) || /vidhide|morencius|minochinos|filelions/i.test(h)) return "VidHide";
+  if (/abyss/i.test(s) || /abyssplayer/i.test(h)) return "AbyssPlayer";
+  if (/streamtape|stape/i.test(s) || /streamtape|stape/i.test(h)) return "StreamTape";
+  if (/filemoon|moonplayer/i.test(s) || /filemoon|moonplayer/i.test(h)) return "FileMoon";
+  if (/ok\.?ru|ok\b/i.test(s) || /ok\.ru/i.test(h)) return "OK.ru";
+  if (/vkvideo|vk\.com|vk\b/i.test(s) || /vkvideo|vk\.com/i.test(h)) return "VK";
+  if (/uqload/i.test(s) || /uqload/i.test(h)) return "Uqload";
+  if (/sendvid/i.test(s) || /sendvid/i.test(h)) return "Sendvid";
+  if (/yourupload/i.test(s) || /yourupload/i.test(h)) return "YourUpload";
+  if (/dood/i.test(s) || /dood/i.test(h)) return "DoodStream";
+
+  var clean = s.replace(/دۆبلاژ|ژێرنوس|ژێرنووس|کوردی|کورد|سێرڤەری?|سیرڤەر|بینین/g, "").trim();
+  if (clean) return clean.charAt(0).toUpperCase() + clean.slice(1);
+  return h.split(".")[0].toUpperCase() || "Server";
 }
 
-function makeStream(resolved, streamTitle, quality, label, direct) {
-  var referer = resolved.origin ? resolved.origin + "/" : BASE_URL + "/";
+function makeStream(resolved, streamTitle, quality, label, isDirect, isDub) {
+  var referer = (resolved && resolved.headers && resolved.headers.Referer) ||
+                (resolved.origin ? resolved.origin + "/" : BASE_URL + "/");
+  var dubTag = isDub ? "KU Dub" : "KU Sub";
+  var typeTag = isDirect ? "" : " · Embed";
+
   return {
-    name: PROVIDER_NAME + " [" + label + (direct ? "" : " · KU Dub") + "]",
+    name: PROVIDER_NAME + " [" + label + typeTag + " · " + dubTag + "]",
     title: streamTitle + " · " + quality,
     url: resolved.url,
     quality: quality,
-    isDirect: !!direct,
+    isDirect: !!isDirect,
+    isDub: !!isDub,
     headers: {
       "User-Agent": UA,
       "Referer": referer,
       "Origin": resolved.origin || BASE_URL
     },
-    subtitles: []
+    subtitles: (resolved && resolved.subtitles) || []
   };
 }
 
@@ -871,15 +1157,15 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       (isMovie ? "" : " S" + pad2(s) + "E" + pad2(e)) +
       (tmdbInfo.year ? " (" + tmdbInfo.year + ")" : "");
 
-    console.log("[" + PROVIDER_NAME + "] Servers: " +
-      videos.map(function (v) { return serverLabel(v); }).join(", "));
+    console.log("[" + PROVIDER_NAME + "] Servers (" + videos.length + "): " +
+      videos.map(function (v) { return formatServerName(v.server, v.url); }).join(", "));
 
     var resolvedList = await Promise.all(videos.map(async function (video) {
       try {
         var resolved = await resolveEmbed(video.url);
         if (resolved) return { resolved: resolved, video: video };
       } catch (err) {
-        console.log("[" + PROVIDER_NAME + "] " + serverLabel(video) + " resolver error: " + err.message);
+        console.log("[" + PROVIDER_NAME + "] " + formatServerName(video.server, video.url) + " error: " + err.message);
       }
       return null;
     }));
@@ -898,7 +1184,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       if (resolved.dead) {
         deadVideos[item.video.url] = true;
         solvedVideos[item.video.url] = true;
-        console.log("[" + PROVIDER_NAME + "] " + serverLabel(item.video) + " -> upload removed, skipped");
+        console.log("[" + PROVIDER_NAME + "] " + formatServerName(item.video.server, item.video.url) + " -> upload removed, skipped");
         continue;
       }
 
@@ -913,57 +1199,71 @@ async function getStreams(tmdbId, mediaType, season, episode) {
       });
     }
 
-    // Measuring real resolutions hits the network, so do it in parallel
-    streams = (await Promise.all(pending.map(async function (p) {
+    // Verify media & determine qualities in parallel
+    var directStreams = (await Promise.all(pending.map(async function (p) {
       var headers = {
         "User-Agent": UA,
         "Referer": (p.resolved.origin || BASE_URL) + "/"
       };
 
       if (!(await servesMedia(p.resolved.url, headers))) {
-        // The resolver only found the player page, so let the in-app player handle it
         delete seenUrls[p.resolved.url];
         delete solvedVideos[p.video.url];
-        console.log("[" + PROVIDER_NAME + "] " + serverLabel(p.video) + " -> answered with a page, kept as embed");
+        console.log("[" + PROVIDER_NAME + "] " + formatServerName(p.video.server, p.video.url) + " -> not playable media, kept as embed");
         return null;
       }
 
-      var quality = await inferQuality(p.resolved.url, headers, p.video.quality);
+      var fallbackQuality = p.resolved.quality || p.video.quality;
+      var quality = await inferQuality(p.resolved.url, headers, fallbackQuality);
+      var sLabel = formatServerName(p.video.server, p.video.url);
 
-      console.log("[" + PROVIDER_NAME + "] " + serverLabel(p.video) + " (" + quality + ") -> " +
+      console.log("[" + PROVIDER_NAME + "] " + sLabel + " (" + quality + ") -> " +
         p.resolved.url.slice(0, 90) + "...");
 
-      return makeStream(p.resolved, streamTitle, quality, serverLabel(p.video), p.isDirect);
+      return makeStream(p.resolved, streamTitle, quality, sLabel, p.isDirect, p.video.isDub);
     }))).filter(Boolean);
 
-    // Unresolved embeds are still offered so the in-app player can try them
+    streams = streams.concat(directStreams);
+
+    // Unresolved embeds are offered as web embeds so in-app player can display them
     for (var j = 0; j < videos.length; j++) {
       var v = videos[j];
       if (deadVideos[v.url] || solvedVideos[v.url] || seenUrls[v.url]) continue;
       seenUrls[v.url] = true;
-      streams.push({
-        name: PROVIDER_NAME + " [" + serverLabel(v) + " · Embed]",
-        title: streamTitle + " · " + normalizeQualityLabel(v.quality),
-        url: v.url,
-        quality: normalizeQualityLabel(v.quality),
-        isDirect: false,
-        headers: {
-          "User-Agent": UA,
-          "Referer": BASE_URL + "/",
-          "Origin": originOf(v.url) || BASE_URL
-        },
-        subtitles: []
-      });
+
+      var embedQuality = normalizeQualityLabel(v.quality);
+      var embLabel = formatServerName(v.server, v.url);
+
+      streams.push(makeStream(
+        { url: v.url, origin: originOf(v.url) || BASE_URL },
+        streamTitle,
+        embedQuality,
+        embLabel,
+        false,
+        v.isDub
+      ));
     }
 
+    // Sort: Dubbed first, Direct first, Quality descending
     streams.sort(function (a, b) {
+      if (a.isDub !== b.isDub) return a.isDub ? -1 : 1;
       if (a.isDirect !== b.isDirect) return a.isDirect ? -1 : 1;
       return (QUALITY_ORDER[b.quality] || -1) - (QUALITY_ORDER[a.quality] || -1);
     });
-    streams.forEach(function (st) { delete st.isDirect; });
 
-    console.log("[" + PROVIDER_NAME + "] Done: " + streams.length + " stream(s)");
-    return streams;
+    var finalStreams = [];
+    var finalSeen = {};
+    for (var k = 0; k < streams.length; k++) {
+      var st = streams[k];
+      delete st.isDirect;
+      delete st.isDub;
+      if (!st.url || finalSeen[st.url]) continue;
+      finalSeen[st.url] = true;
+      finalStreams.push(st);
+    }
+
+    console.log("[" + PROVIDER_NAME + "] Done: " + finalStreams.length + " stream(s)");
+    return finalStreams;
 
   } catch (err) {
     console.error("[" + PROVIDER_NAME + "] Fatal: " + err.message);
