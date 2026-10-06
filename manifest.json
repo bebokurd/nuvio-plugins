@@ -288,6 +288,19 @@
       "contentLanguage": ["ku", "en"]
     },
     {
+      "id": "nuvio-beenar",
+      "name": "بەنار | Beenar",
+      "description": "Kurdish (Sorani) subtitled movies and TV shows from Beenar — public API search with multi-server direct stream extraction (~3s)",
+      "version": "1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "providers/beenar.js",
+      "enabled": true,
+      "formats": ["m3u8", "mp4"],
+      "logo": "https://www.google.com/s2/favicons?domain=beenar.net&sz=256",
+      "contentLanguage": ["ku", "en"]
+    },
+    {
       "id": "nuvio-kurdfilm",
       "name": "کوردفیلم | KurdFilm",
       "description": "Kurdish (Sorani & Badini) subtitled movies and TV shows from KurdFilm — multi-server streams with direct HLS & VTT subtitles (~3s)",
