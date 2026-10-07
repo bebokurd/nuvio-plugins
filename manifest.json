@@ -314,6 +314,19 @@
       "contentLanguage": ["ku", "en"]
     },
     {
+      "id": "nuvio-anipm",
+      "name": "AniPM",
+      "description": "Subbed & dubbed Japanese anime from ani.pm — Player API bootstrap with Settlar HLS masters (~3s)",
+      "version": "1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "providers/anipm.js",
+      "enabled": true,
+      "formats": ["m3u8"],
+      "logo": "https://ani.pm/favicon.ico",
+      "contentLanguage": ["ja", "en"]
+    },
+    {
       "id": "nuvio-kurdfilm",
       "name": "کوردفیلم | KurdFilm",
       "description": "Kurdish (Sorani & Badini) subtitled movies and TV shows from KurdFilm — multi-server streams with direct HLS & VTT subtitles (~3s)",

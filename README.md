@@ -8,7 +8,7 @@ Fetch streams from top international, Kurdish, Arabic, and Anime providers — m
 
 ---
 
-[![Plugins](https://img.shields.io/badge/PLUGINS-30%20ACTIVE-007ACC?style=for-the-badge&logo=puzzle&logoColor=white)](manifest.json)
+[![Plugins](https://img.shields.io/badge/PLUGINS-31%20ACTIVE-007ACC?style=for-the-badge&logo=puzzle&logoColor=white)](manifest.json)
 [![Nuvio Compatible](https://img.shields.io/badge/NUVIO-COMPATIBLE%20%E2%9C%93-2EA44F?style=for-the-badge&logo=android&logoColor=white)](manifest.json)
 [![Quality](https://img.shields.io/badge/MAX%20QUALITY-4K%20%7C%201080P-FF5722?style=for-the-badge&logo=4k&logoColor=white)](manifest.json)
 [![Languages](https://img.shields.io/badge/LANGUAGES-KURDISH%20%7C%20MULTI-9C27B0?style=for-the-badge&logo=google-translate&logoColor=white)](manifest.json)
@@ -21,7 +21,7 @@ Fetch streams from top international, Kurdish, Arabic, and Anime providers — m
 
 | ☀️ **Kurdish Spotlight** | 🎬 **Global Cinema** | 🌸 **Anime & Asian Drama** |
 | :--- | :--- | :--- |
-| First-class Kurdish (Sorani & Badini) subtitled streams from Beenar, KurdCinema, KurdFilm, Kurdsubtitle, ShaFilm & Awenafilm, plus the Kurdish dubbed (Doblaj) catalog on kurd-movie.com | Massive catalogs of Hollywood, Bollywood & European shows with 4K / 1080p master playlists | Japanese Anime (sub/dub), K-Dramas, C-Dramas, and Spacetoon-era Arabic dubbed classics |
+| First-class Kurdish (Sorani & Badini) subtitled streams from Beenar, KurdCinema, KurdFilm, Kurdsubtitle, ShaFilm & Awenafilm, plus the Kurdish dubbed (Doblaj) catalog on kurd-movie.com | Massive catalogs of Hollywood, Bollywood & European shows with 4K / 1080p master playlists | Japanese Anime (sub/dub via AnimePahe, AniNeko & ani.pm), K-Dramas, C-Dramas, and Spacetoon-era Arabic dubbed classics |
 
 | 🚀 **Direct Video Streams** | ⚡ **Lightning Fast** | 🧩 **One-Click Integration** |
 | :--- | :--- | :--- |
@@ -31,7 +31,7 @@ Fetch streams from top international, Kurdish, Arabic, and Anime providers — m
 
 ## 📲 Quick Installation
 
-Add all **30 plugins** to your Nuvio app in under a minute:
+Add all **31 plugins** to your Nuvio app in under a minute:
 
 1. Open **Nuvio** on your device.
 2. Navigate to **Settings** → **Plugins** → **Add new repository**.
@@ -95,6 +95,7 @@ Dedicated sources for Japanese Anime, East Asian Dramas, and nostalgic Arabic du
 | :--- | :---: | :--- | :---: | :---: |
 | <img src="https://animepahe.ru/favicon.ico" width="22" height="22" /> [**AnimePahe**](https://animepahe.ru) | 🇯🇵 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Anime (Sub & Dub) | **1080p** | `m3u8` |
 | <img src="https://i.postimg.cc/FzGgkp2F/IMG-0639.jpg" width="22" height="22" /> [**AniNeko**](https://anineko.to) | 🇯🇵 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Anime (Sub & Dub) | **1080p** | `m3u8` |
+| <img src="https://ani.pm/favicon.ico" width="22" height="22" /> [**AniPM**](https://ani.pm) | 🇯🇵 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Anime (Sub & Dub) | **1080p** | `m3u8` |
 | <img src="https://bollyflix.tools/apple-touch-icon.png" width="22" height="22" /> [**BollyFlix**](https://bollyflix.tools) | 🇮🇳 🇯🇵 🇰🇷 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Anime, Dramas & Movies | **4K UHD** | `mkv` `mp4` |
 | <img src="https://kisskh.co/favicon.ico" width="22" height="22" /> [**KissKH**](https://kisskh.co) | 🇰🇷 🇨🇳 🇯🇵 🇹🇭 | Asian Dramas & Movies | **1080p** | `m3u8` `mp4` |
 | <img src="https://www.google.com/s2/favicons?domain=tokyoinsider.com&sz=256" width="22" height="22" /> [**TokyoInsider**](https://tokyoinsider.com) | 🇯🇵 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Anime (Sub & Dub) | **1080p** | `mp4` `mkv` |
@@ -103,7 +104,7 @@ Dedicated sources for Japanese Anime, East Asian Dramas, and nostalgic Arabic du
 | <img src="https://www.google.com/s2/favicons?domain=carateen.tv&sz=256" width="22" height="22" /> [**Carateen**](https://carateen.tv) | 🇸🇦 🇪🇬 | Spacetoon Go Anime & Cartoons | **1080p** | `m3u8` |
 | <img src="https://www.google.com/s2/favicons?domain=wecima.cx&sz=256" width="22" height="22" /> [**وى سيما \| WeCima**](https://wecima.cx/category/dubbed-movies) | 🇪🇬 🇸🇦 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Arabic Dubbed & Subtitled Movies & TV | **1080p** | `m3u8` `mp4` |
 
-> **Summary:** 30 plugins actively configured and maintained. Highest supported quality tier is highlighted in **bold**.
+> **Summary:** 31 plugins actively configured and maintained. Highest supported quality tier is highlighted in **bold**.
 
 ---
 
