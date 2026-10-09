@@ -8,7 +8,7 @@ Fetch streams from top Kurdish, Arabic, and Anime providers — movies, TV serie
 
 ---
 
-[![Plugins](https://img.shields.io/badge/PLUGINS-17%20ACTIVE-007ACC?style=for-the-badge&logo=puzzle&logoColor=white)](manifest.json)
+[![Plugins](https://img.shields.io/badge/PLUGINS-18%20ACTIVE-007ACC?style=for-the-badge&logo=puzzle&logoColor=white)](manifest.json)
 [![Nuvio Compatible](https://img.shields.io/badge/NUVIO-COMPATIBLE%20%E2%9C%93-2EA44F?style=for-the-badge&logo=android&logoColor=white)](manifest.json)
 [![Quality](https://img.shields.io/badge/MAX%20QUALITY-4K%20%7C%201080P-FF5722?style=for-the-badge&logo=4k&logoColor=white)](manifest.json)
 [![Languages](https://img.shields.io/badge/LANGUAGES-KURDISH%20%7C%20MULTI-9C27B0?style=for-the-badge&logo=google-translate&logoColor=white)](manifest.json)
@@ -21,7 +21,7 @@ Fetch streams from top Kurdish, Arabic, and Anime providers — movies, TV serie
 
 | ☀️ **Kurdish Spotlight** | 🌸 **Anime & Asian Drama** | 🕌 **Arabic Classics** |
 | :--- | :--- | :--- |
-| First-class Kurdish (Sorani & Badini) subtitled streams from Beenar, KurdCinema, KurdFilm, Kurdsubtitle, ShaFilm, Awenafilm & KRD Watch, plus the Kurdish dubbed (Doblaj) catalog on kurd-movie.com | Japanese Anime (sub/dub via AnimePahe, AniNeko & ani.pm), K-Dramas, C-Dramas, and Bollywood titles via BollyFlix | Spacetoon-era Arabic dubbed classics from Cartoony, Carateen, ArabicToons & WeCima |
+| First-class Kurdish (Sorani & Badini) subtitled streams from Beenar, KurdCinema, KurdFilm, Kurdsubtitle, ShaFilm, Awenafilm, KRD Watch & ChiChi Cinema, plus the Kurdish dubbed (Doblaj) catalog on kurd-movie.com | Japanese Anime (sub/dub via AnimePahe, AniNeko & ani.pm), K-Dramas, C-Dramas, and Bollywood titles via BollyFlix | Spacetoon-era Arabic dubbed classics from Cartoony, Carateen, ArabicToons & WeCima |
 
 | 🚀 **Direct Video Streams** | ⚡ **Lightning Fast** | 🧩 **One-Click Integration** |
 | :--- | :--- | :--- |
@@ -31,7 +31,7 @@ Fetch streams from top Kurdish, Arabic, and Anime providers — movies, TV serie
 
 ## 📲 Quick Installation
 
-Add all **17 plugins** to your Nuvio app in under a minute:
+Add all **18 plugins** to your Nuvio app in under a minute:
 
 1. Open **Nuvio** on your device.
 2. Navigate to **Settings** → **Plugins** → **Add new repository**.
@@ -61,6 +61,7 @@ Dedicated providers featuring Kurdish (Sorani) subtitled and dubbed movies, seri
 | <img src="https://shafilm.vip/public/static/logo_1.png" width="22" height="22" /> [**ShaFilm**](https://shafilm.vip) | 🇮🇶 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Movies & TV Series | **1080p** | `m3u8` `mp4` |
 | <img src="https://www.google.com/s2/favicons?domain=awenafilm.com&sz=128" width="22" height="22" /> [**Awenafilm**](https://awenafilm.com) | 🇮🇶 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Movies & TV Series | **1080p** | `m3u8` |
 | <img src="https://krd.watch/assets/img/krd_mountain_sun.png?v=4" width="22" height="22" /> [**KRD Watch**](https://krd.watch) | 🇮🇶 🏴󠁧󠁢󠁥󠁮󠁧󠁿 🇯🇵 🇰🇷 | Movies, Series, Anime & K-Drama | **1080p** | `mp4` |
+| <img src="https://web.chichicinema.vip/favicon.png" width="22" height="22" /> [**چیچی سینەما \| ChiChi Cinema**](https://web.chichicinema.vip/sorani) | 🇮🇶 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Movies & TV Series (Sorani) | **1080p** | `m3u8` |
 
 ---
 
@@ -81,7 +82,7 @@ Dedicated sources for Japanese Anime, East Asian Dramas, and nostalgic Arabic du
 | <img src="https://www.google.com/s2/favicons?domain=carateen.tv&sz=256" width="22" height="22" /> [**Carateen**](https://carateen.tv) | 🇸🇦 🇪🇬 | Spacetoon Go Anime & Cartoons | **1080p** | `m3u8` |
 | <img src="https://www.google.com/s2/favicons?domain=wecima.cx&sz=256" width="22" height="22" /> [**وى سيما \| WeCima**](https://wecima.cx/category/dubbed-movies) | 🇪🇬 🇸🇦 🏴󠁧󠁢󠁥󠁮󠁧󠁿 | Arabic Dubbed & Subtitled Movies & TV | **1080p** | `m3u8` `mp4` |
 
-> **Summary:** 17 plugins actively configured and maintained. Highest supported quality tier is highlighted in **bold**.
+> **Summary:** 18 plugins actively configured and maintained. Highest supported quality tier is highlighted in **bold**.
 
 ---
 
