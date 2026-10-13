@@ -22,9 +22,13 @@ var PLAYABLE_EXT = /\.(mp4|mkv|webm|m3u8)(\?|$)/i;
 var HLS_MARKER = /\/hls\//i;
 var DEAD_HOST = /shafilmbot\.herokuapp\.com/i;
 
-// Server buttons look like:
+// Server buttons come in two shapes. The dropdown menu uses:
 //   <button class="btn-service dropdown-source" data-embed="63089"><span class="name">SHA NVME</span></button>
-var SERVER_RE = /data-embed="(\d+)"[^>]*>\s*<span class="name">\s*([^<]*?)\s*<\/span>/gi;
+// while the currently-selected server (often the only server for an episode,
+// e.g. the SHA NVME host nvme.andes.krd) is rendered inline as:
+//   <a class="dropdown-toggle btn-service selected" data-embed="66987" data-service-id="6">سێرڤەر: <span>SHA NVME</span></a>
+// So capture the first <span> that immediately follows any data-embed tag.
+var SERVER_RE = /data-embed="(\d+)"[^>]*>[^<]*?<span[^>]*>\s*([^<]*?)\s*<\/span>/gi;
 
 // Embed responses either contain a direct player:
 //   const videoUrl = "https://...";
