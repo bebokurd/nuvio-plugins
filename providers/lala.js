@@ -1,5 +1,5 @@
-// Lala GarmYani Scraper for Nuvio Local Scrapers
-// Kurdish dubbed & subtitled movies, animations and TV series from Lala GarmYani
+// CHYA TV Scraper for Nuvio Local Scrapers
+// Kurdish dubbed & subtitled movies, animations and TV series from CHYA TV 
 // Source endpoint: https://bebokurd.github.io/lala.json
 // Compatible with React Native / Hermes and Node.js
 
