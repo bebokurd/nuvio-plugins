@@ -5,7 +5,7 @@
 
 "use strict";
 
-var PROVIDER_NAME = "Lala GarmYani";
+var PROVIDER_NAME = "CHYA TV";
 var DATA_URL = "https://bebokurd.github.io/lala.json";
 var TMDB_API_KEY = "1c29a5198ee1854bd5eb45dbe8d17d92";
 var TIMEOUT_MS = 15000;
