@@ -8,12 +8,20 @@
       "description": "AnimePahe streaming links with sub and dub support (~6s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/animepahe.js",
       "enabled": true,
-      "formats": ["m3u8"],
+      "formats": [
+        "m3u8"
+      ],
       "logo": "https://files.catbox.moe/deot3a.png",
-      "contentLanguage": ["en", "ja"]
+      "contentLanguage": [
+        "en",
+        "ja"
+      ]
     },
     {
       "id": "nuvio-anineko",
@@ -21,12 +29,20 @@
       "description": "AniNeko streaming with multiple servers in good quality (~5s)",
       "version": "1.0",
       "author": "raymondnoodles",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/anineko.js",
       "enabled": true,
-      "formats": ["m3u8"],
+      "formats": [
+        "m3u8"
+      ],
       "logo": "https://files.catbox.moe/qlvz36.jpeg",
-      "contentLanguage": ["en", "ja"]
+      "contentLanguage": [
+        "en",
+        "ja"
+      ]
     },
     {
       "id": "nuvio-bollyflix",
@@ -34,25 +50,50 @@
       "description": "BollyFlix streaming with multiple qualities and languages (~7s)",
       "version": "1.0",
       "author": "raymondnoodles",
-      "supportedTypes": ["movie", "tv", "anime"],
+      "supportedTypes": [
+        "movie",
+        "tv",
+        "anime"
+      ],
       "filename": "providers/bollyflix.js",
       "enabled": true,
-      "formats": ["mkv", "mp4"],
+      "formats": [
+        "mkv",
+        "mp4"
+      ],
       "logo": "https://ruayamo.s-ul.eu/a5T2socz",
-      "contentLanguage": ["en", "hi", "ta", "te", "ja", "pa", "ml", "ko"]
-    }, 
+      "contentLanguage": [
+        "en",
+        "hi",
+        "ta",
+        "te",
+        "ja",
+        "pa",
+        "ml",
+        "ko"
+      ]
+    },
     {
       "id": "nuvio-kurdsubtitle",
       "name": "Kurdsubtitle",
       "description": "Kurdish subtitled movies and TV shows (~4s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/kurdsubtitle.js",
       "enabled": true,
-      "formats": ["m3u8", "mp4"],
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
       "logo": "https://kurdsubtitle.net/favicon.ico",
-      "contentLanguage": ["ku", "en"]
+      "contentLanguage": [
+        "ku",
+        "en"
+      ]
     },
     {
       "id": "nuvio-awenafilm",
@@ -60,12 +101,20 @@
       "description": "Kurdish subtitled movies and TV shows with direct HLS links (~5s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/awenafilm.js",
       "enabled": true,
-      "formats": ["m3u8"],
+      "formats": [
+        "m3u8"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=awenafilm.com&sz=256",
-      "contentLanguage": ["ku", "en"]
+      "contentLanguage": [
+        "ku",
+        "en"
+      ]
     },
     {
       "id": "nuvio-shafilm",
@@ -73,12 +122,21 @@
       "description": "Kurdish (Sorani) subtitled movies and TV shows with direct HLS links (~5s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/shafilm.js",
       "enabled": true,
-      "formats": ["m3u8", "mp4"],
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
       "logo": "https://shafilm.vip/public/static/logo_1.png",
-      "contentLanguage": ["ku", "en"]
+      "contentLanguage": [
+        "ku",
+        "en"
+      ]
     },
     {
       "id": "nuvio-arabictoons",
@@ -86,12 +144,20 @@
       "description": "Arabic dubbed anime series and animated movies with direct MP4 links (~7s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv", "anime"],
+      "supportedTypes": [
+        "movie",
+        "tv",
+        "anime"
+      ],
       "filename": "providers/arabictoons.js",
       "enabled": true,
-      "formats": ["mp4"],
+      "formats": [
+        "mp4"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=arabic-toons.com&sz=256",
-      "contentLanguage": ["ar"]
+      "contentLanguage": [
+        "ar"
+      ]
     },
     {
       "id": "nuvio-cartoony",
@@ -99,12 +165,20 @@
       "description": "Arabic dubbed cartoons, Spacetoon-era shows and animated movies with direct HLS links (~5s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv", "anime"],
+      "supportedTypes": [
+        "movie",
+        "tv",
+        "anime"
+      ],
       "filename": "providers/cartoony.js",
       "enabled": true,
-      "formats": ["m3u8"],
+      "formats": [
+        "m3u8"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=cartoony.net&sz=256",
-      "contentLanguage": ["ar"]
+      "contentLanguage": [
+        "ar"
+      ]
     },
     {
       "id": "nuvio-carateen",
@@ -112,12 +186,20 @@
       "description": "Arabic dubbed cartoons and Spacetoon Go shows and animated movies with direct HLS links, strict title matching (~5s)",
       "version": "1.1",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv", "anime"],
+      "supportedTypes": [
+        "movie",
+        "tv",
+        "anime"
+      ],
       "filename": "providers/carateen.js",
       "enabled": true,
-      "formats": ["m3u8"],
+      "formats": [
+        "m3u8"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=carateen.tv&sz=256",
-      "contentLanguage": ["ar"]
+      "contentLanguage": [
+        "ar"
+      ]
     },
     {
       "id": "nuvio-wecima",
@@ -125,12 +207,22 @@
       "description": "Arabic dubbed and subtitled movies and TV shows from WeCima / MyCima with multi-server streams (~5s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv", "anime"],
+      "supportedTypes": [
+        "movie",
+        "tv",
+        "anime"
+      ],
       "filename": "providers/wecima.js",
       "enabled": true,
-      "formats": ["m3u8", "mp4"],
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=wecima.cx&sz=256",
-      "contentLanguage": ["ar", "en"]
+      "contentLanguage": [
+        "ar",
+        "en"
+      ]
     },
     {
       "id": "nuvio-kurdcinama",
@@ -138,12 +230,21 @@
       "description": "Kurdish (Sorani) subtitled movies and TV shows from KurdCinema — fast AJAX search with multi-server direct stream extraction (~4s)",
       "version": "1.2",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/kurdcinama.js",
       "enabled": true,
-      "formats": ["m3u8", "mp4"],
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=kurdcinama.com&sz=256",
-      "contentLanguage": ["ku", "en"]
+      "contentLanguage": [
+        "ku",
+        "en"
+      ]
     },
     {
       "id": "nuvio-beenar",
@@ -151,12 +252,21 @@
       "description": "Kurdish (Sorani) subtitled movies and TV shows from Beenar — public API search with multi-server direct stream extraction (~3s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/beenar.js",
       "enabled": true,
-      "formats": ["m3u8", "mp4"],
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=beenar.net&sz=256",
-      "contentLanguage": ["ku", "en"]
+      "contentLanguage": [
+        "ku",
+        "en"
+      ]
     },
     {
       "id": "nuvio-doblaj",
@@ -164,12 +274,21 @@
       "description": "Kurdish dubbed (Doblaj) movies & series from kurd-movie.com — DooPlay server extraction with direct HLS where available (~4s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/doblaj.js",
       "enabled": true,
-      "formats": ["m3u8", "mp4"],
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=kurd-movie.com&sz=256",
-      "contentLanguage": ["ku", "en"]
+      "contentLanguage": [
+        "ku",
+        "en"
+      ]
     },
     {
       "id": "nuvio-anipm",
@@ -177,12 +296,20 @@
       "description": "Subbed & dubbed Japanese anime from ani.pm — Player API bootstrap with Settlar HLS masters (~3s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/anipm.js",
       "enabled": true,
-      "formats": ["m3u8"],
+      "formats": [
+        "m3u8"
+      ],
       "logo": "https://ani.pm/favicon.ico",
-      "contentLanguage": ["ja", "en"]
+      "contentLanguage": [
+        "ja",
+        "en"
+      ]
     },
     {
       "id": "nuvio-krdwatch",
@@ -190,12 +317,20 @@
       "description": "Kurdish subtitled movies, series, anime & K-dramas from krd.watch — proxied MP4 sources with Kurdish/English subtitles (~2s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/krdwatch.js",
       "enabled": true,
-      "formats": ["mp4"],
+      "formats": [
+        "mp4"
+      ],
       "logo": "https://krd.watch/assets/img/krd_mountain_sun.png?v=4",
-      "contentLanguage": ["ku", "en"]
+      "contentLanguage": [
+        "ku",
+        "en"
+      ]
     },
     {
       "id": "nuvio-chichicinema",
@@ -203,12 +338,19 @@
       "description": "Kurdish (Sorani) subtitled movies & series from chichicinema.vip — direct HLS streams (~3s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/chichicinema.js",
       "enabled": true,
-      "formats": ["m3u8"],
+      "formats": [
+        "m3u8"
+      ],
       "logo": "https://web.chichicinema.vip/favicon.png",
-      "contentLanguage": ["ku"]
+      "contentLanguage": [
+        "ku"
+      ]
     },
     {
       "id": "nuvio-kurdfilm",
@@ -216,12 +358,44 @@
       "description": "Kurdish (Sorani & Badini) subtitled movies and TV shows from KurdFilm — multi-server streams with direct HLS & VTT subtitles (~3s)",
       "version": "1.0",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "providers/kurdfilm.js",
       "enabled": true,
-      "formats": ["m3u8", "mp4"],
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
       "logo": "https://kurdfilm.krd/icon-180.png",
-      "contentLanguage": ["ku", "en"]
+      "contentLanguage": [
+        "ku",
+        "en"
+      ]
+    },
+    {
+      "id": "nuvio-lala",
+      "name": " chya tv  |  ",
+      "description": "Kurdish dubbed & subtitled movies, animations & TV series from Lala GarmYani with direct high-speed HLS & MP4 streams (~2s)",
+      "version": "1.0",
+      "author": "CHYA",
+      "supportedTypes": [
+        "movie",
+        "tv",
+        "anime"
+      ],
+      "filename": "providers/lala.js",
+      "enabled": true,
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
+      "logo": "https://bebokurd.github.io/channels4_profile-removebg-preview.png",
+      "contentLanguage": [
+        "ku",
+        "en"
+      ]
     },
     {
       "id": "nuvio-tokyoinsider",
@@ -229,12 +403,22 @@
       "description": "TokyoInsider streaming with high-quality links, sub or dub (~7s)",
       "version": "1.1",
       "author": "raymondnoodles",
-      "supportedTypes": ["movie", "tv", "anime"],
+      "supportedTypes": [
+        "movie",
+        "tv",
+        "anime"
+      ],
       "filename": "providers/tokyoinsider.js",
       "enabled": true,
-      "formats": ["mp4", "mkv"],
+      "formats": [
+        "mp4",
+        "mkv"
+      ],
       "logo": "https://www.google.com/s2/favicons?domain=tokyoinsider.com&sz=256",
-      "contentLanguage": ["en", "ja"]
+      "contentLanguage": [
+        "en",
+        "ja"
+      ]
     }
   ]
 }
