@@ -419,6 +419,27 @@
         "en",
         "ja"
       ]
+    },
+    {
+      "id": "nuvio-trybox",
+      "name": "TryBox",
+      "description": "Multi-source global movies & TV via the TryBox aggregator — 14 curated embed players (vidsrc, vidlink, vidfast, videasy, 2embed & more) (~1s)",
+      "version": "1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/trybox.js",
+      "enabled": true,
+      "formats": [
+        "mp4",
+        "m3u8"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=trybox.app&sz=128",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
