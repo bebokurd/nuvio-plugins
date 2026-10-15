@@ -440,6 +440,27 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "nuvio-yapgrid",
+      "name": "YapGrid",
+      "description": "Global movies & TV via the YapGrid embed player — direct HLS extracted from its public API with multi-language subtitle tracks (~5s)",
+      "version": "1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/yapgrid.js",
+      "enabled": true,
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=yapgrid.com&sz=128",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
